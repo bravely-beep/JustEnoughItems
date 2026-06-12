@@ -50,9 +50,6 @@ public final class CustomIngredientOrder {
 	private static final Logger LOGGER = LogManager.getLogger();
 	private static final String FILE_NAME = "ingredient-order.json";
 
-	/** Marker between a registry id and a potion id in a potion-variant key. */
-	public static final String POTION_SELECTOR = "?potion=";
-
 	/** Rank for ingredients that match no key; keeps them equal so later stages decide. */
 	public static final int UNRANKED = Integer.MAX_VALUE;
 
@@ -121,7 +118,7 @@ public final class CustomIngredientOrder {
 				}
 				if (!ranks.containsKey(key)) {
 					ranks.put(key, index++);
-					if (key.contains(POTION_SELECTOR)) {
+					if (key.contains(CustomIngredientKeys.POTION_SELECTOR)) {
 						needsPotionContents = true;
 					}
 				}

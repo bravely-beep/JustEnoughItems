@@ -146,7 +146,8 @@ public class IngredientFilter implements
 
 	private <V> boolean updateHiddenState(IListElement<V> element) {
 		ITypedIngredient<V> typedIngredient = element.getTypedIngredient();
-		boolean visible = this.ingredientVisibility.isIngredientVisible(typedIngredient);
+		boolean visible = this.ingredientVisibility.isIngredientVisible(typedIngredient)
+			&& !CustomHiddenIngredients.get().isHidden(typedIngredient, this.ingredientManager);
 		if (element.isVisible() != visible) {
 			element.setVisible(visible);
 			return true;

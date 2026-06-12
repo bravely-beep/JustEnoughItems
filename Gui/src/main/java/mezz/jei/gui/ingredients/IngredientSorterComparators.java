@@ -8,18 +8,12 @@ import mezz.jei.common.util.RegistryUtil;
 import mezz.jei.gui.config.IngredientTypeSortingConfig;
 import mezz.jei.gui.config.ModNameSortingConfig;
 import net.minecraft.core.HolderSet.ListBacked;
-import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentHolder;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.alchemy.PotionContents;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.Comparator;
@@ -85,38 +79,10 @@ public class IngredientSorterComparators {
 		boolean needsPotionContents = order.needsPotionContents();
 		return Comparator.comparingInt(info -> {
 			String resourceLocation = info.getResourceLocation().toString();
-			ResourceLocation potionId = needsPotionContents ? getPotionId(info) : null;
-			List<String> candidateKeys;
-			if (potionId != null) {
-				// most specific (potion variant) first, then the plain registry id
-				candidateKeys = List.of(
-					resourceLocation + CustomIngredientOrder.POTION_SELECTOR + potionId,
-					resourceLocation
-				);
-			} else {
-				candidateKeys = List.of(resourceLocation);
-			}
+			Object ingredient = info.getTypedIngredient().getIngredient();
+			List<String> candidateKeys = CustomIngredientKeys.candidateKeys(resourceLocation, ingredient, needsPotionContents);
 			return order.rank(candidateKeys);
 		});
-	}
-
-	// Reads the potion id from an ingredient's minecraft:potion_contents component, if any.
-	// Both ItemStack and (NeoForge) FluidStack implement the vanilla DataComponentHolder, so
-	// this distinguishes potion variants for items and fluids alike, e.g. create:potion fluids,
-	// without depending on any mod- or loader-specific type. Returns null when absent.
-	@Nullable
-	private static ResourceLocation getPotionId(IListElementInfo<?> info) {
-		Object ingredient = info.getTypedIngredient().getIngredient();
-		if (ingredient instanceof DataComponentHolder holder) {
-			PotionContents potionContents = holder.get(DataComponents.POTION_CONTENTS);
-			if (potionContents != null) {
-				return potionContents.potion()
-					.flatMap(Holder::unwrapKey)
-					.map(ResourceKey::location)
-					.orElse(null);
-			}
-		}
-		return null;
 	}
 
 	private static Comparator<IListElementInfo<?>> getAlphabeticalComparator() {
