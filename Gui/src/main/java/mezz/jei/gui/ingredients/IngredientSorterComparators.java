@@ -3,6 +3,7 @@ package mezz.jei.gui.ingredients;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.runtime.IIngredientManager;
+import mezz.jei.api.runtime.IPinnedIngredientOrderConfig;
 import mezz.jei.common.config.IngredientSortStage;
 import mezz.jei.common.util.RegistryUtil;
 import mezz.jei.gui.config.IngredientTypeSortingConfig;
@@ -29,17 +30,20 @@ public class IngredientSorterComparators {
 	private final IIngredientManager ingredientManager;
 	private final ModNameSortingConfig modNameSortingConfig;
 	private final IngredientTypeSortingConfig ingredientTypeSortingConfig;
+	private final IPinnedIngredientOrderConfig pinnedIngredientOrderConfig;
 	private final Set<String> modNames;
 
 	public IngredientSorterComparators(
 		IIngredientManager ingredientManager,
 		ModNameSortingConfig modNameSortingConfig,
 		IngredientTypeSortingConfig ingredientTypeSortingConfig,
+		IPinnedIngredientOrderConfig pinnedIngredientOrderConfig,
 		Set<String> modNames
 	) {
 		this.ingredientManager = ingredientManager;
 		this.modNameSortingConfig = modNameSortingConfig;
 		this.ingredientTypeSortingConfig = ingredientTypeSortingConfig;
+		this.pinnedIngredientOrderConfig = pinnedIngredientOrderConfig;
 		this.modNames = modNames;
 	}
 
@@ -59,6 +63,7 @@ public class IngredientSorterComparators {
 			case TAG -> getTagComparator();
 			case ARMOR -> getArmorComparator();
 			case MAX_DURABILITY -> getMaxDurabilityComparator();
+			case PINNED_ORDER -> getPinnedOrderComparator();
 		};
 	}
 
@@ -78,6 +83,10 @@ public class IngredientSorterComparators {
 
 	private Comparator<IListElementInfo<?>> getModNameComparator() {
 		return this.modNameSortingConfig.getComparatorFromMappedValues(modNames);
+	}
+
+	private Comparator<IListElementInfo<?>> getPinnedOrderComparator() {
+		return Comparator.comparingInt(info -> pinnedIngredientOrderConfig.getSortedIndex(info.getTypedIngredient()));
 	}
 
 	private Comparator<IListElementInfo<?>> getIngredientTypeComparator() {

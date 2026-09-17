@@ -10,6 +10,7 @@ import mezz.jei.api.runtime.IEditModeConfig;
 import mezz.jei.api.runtime.IIngredientFilter;
 import mezz.jei.api.runtime.IIngredientListOverlay;
 import mezz.jei.api.runtime.IIngredientManager;
+import mezz.jei.api.runtime.IPinnedIngredientOrderConfig;
 import mezz.jei.api.runtime.IRecipesGui;
 import mezz.jei.api.runtime.IScreenHelper;
 import mezz.jei.api.search.ISearchStorage;
@@ -25,6 +26,7 @@ public class RuntimeRegistration implements IRuntimeRegistration {
 	private final IRecipeManager recipeManager;
 	private final IJeiHelpers jeiHelpers;
 	private final IEditModeConfig editModeConfig;
+	private final IPinnedIngredientOrderConfig ingredientOrderConfig;
 	private final IIngredientManager ingredientManager;
 	private final IRecipeTransferManager recipeTransferManager;
 	private final IScreenHelper screenHelper;
@@ -40,6 +42,7 @@ public class RuntimeRegistration implements IRuntimeRegistration {
 		IRecipeManager recipeManager,
 		IJeiHelpers jeiHelpers,
 		IEditModeConfig editModeConfig,
+		IPinnedIngredientOrderConfig ingredientOrderConfig,
 		IIngredientManager ingredientManager,
 		IRecipeTransferManager recipeTransferManager,
 		IScreenHelper screenHelper,
@@ -48,6 +51,7 @@ public class RuntimeRegistration implements IRuntimeRegistration {
 		this.recipeManager = recipeManager;
 		this.jeiHelpers = jeiHelpers;
 		this.editModeConfig = editModeConfig;
+		this.ingredientOrderConfig = ingredientOrderConfig;
 		this.ingredientManager = ingredientManager;
 		this.recipeTransferManager = recipeTransferManager;
 		this.screenHelper = screenHelper;
@@ -107,6 +111,11 @@ public class RuntimeRegistration implements IRuntimeRegistration {
 	@Override
 	public IEditModeConfig getEditModeConfig() {
 		return this.editModeConfig;
+	}
+
+	@Override
+	public IPinnedIngredientOrderConfig getIngredientOrderConfig() {
+		return this.ingredientOrderConfig;
 	}
 
 	@SuppressWarnings("removal")

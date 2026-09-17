@@ -14,6 +14,7 @@ import mezz.jei.api.runtime.IEditModeConfig;
 import mezz.jei.api.runtime.IIngredientFilter;
 import mezz.jei.api.runtime.IIngredientManager;
 import mezz.jei.api.runtime.IIngredientVisibility;
+import mezz.jei.api.runtime.IPinnedIngredientOrderConfig;
 import mezz.jei.api.runtime.IScreenHelper;
 import mezz.jei.api.search.ISearchStorageBuilderFactory;
 import mezz.jei.common.Internal;
@@ -96,6 +97,7 @@ public class JeiGuiStarter {
 		IRecipeManager recipeManager = registration.getRecipeManager();
 		IIngredientManager ingredientManager = registration.getIngredientManager();
 		IEditModeConfig editModeConfig = registration.getEditModeConfig();
+		IPinnedIngredientOrderConfig pinnedIngredientOrderConfig = registration.getIngredientOrderConfig();
 		ISearchStorageBuilderFactory searchStorageBuilderFactory = registration.getSearchStorageBuilderFactory();
 
 		IJeiHelpers jeiHelpers = registration.getJeiHelpers();
@@ -138,6 +140,7 @@ public class JeiGuiStarter {
 			clientConfig,
 			modNameSortingConfig,
 			ingredientTypeSortingConfig,
+			pinnedIngredientOrderConfig,
 			ingredientManager,
 			ingredients
 		);

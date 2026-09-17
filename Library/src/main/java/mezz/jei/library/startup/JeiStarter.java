@@ -25,6 +25,7 @@ import mezz.jei.library.config.ColorNameConfig;
 import mezz.jei.library.config.EditModeConfig;
 import mezz.jei.library.config.JeiConfigData;
 import mezz.jei.library.config.ModIdFormatConfig;
+import mezz.jei.library.config.PinnedIngredientOrderConfig;
 import mezz.jei.library.config.RecipeCategorySortingConfig;
 import mezz.jei.library.focus.FocusFactory;
 import mezz.jei.library.helpers.CodecHelper;
@@ -136,6 +137,13 @@ public final class JeiStarter {
 		);
 		EditModeConfig editModeConfig = new EditModeConfig(editModeSerializer, ingredientManager);
 
+		PinnedIngredientOrderConfig.FileSerializer pinnedIngredientOrderSerializer = new PinnedIngredientOrderConfig.FileSerializer(
+			configDir.resolve("order.json"),
+			registryAccess,
+			codecHelper
+		);
+		PinnedIngredientOrderConfig pinnedIngredientOrderConfig = new PinnedIngredientOrderConfig(pinnedIngredientOrderSerializer, ingredientManager);
+
 		ImmutableSetMultimap<String, String> modAliases = PluginLoader.registerModAliases(data);
 		JeiHelpers jeiHelpers = PluginLoader.createJeiHelpers(
 			modAliases,
@@ -174,6 +182,7 @@ public final class JeiStarter {
 			recipeManager,
 			jeiHelpers,
 			editModeConfig,
+			pinnedIngredientOrderConfig,
 			ingredientManager,
 			recipeTransferManager,
 			screenHelper,

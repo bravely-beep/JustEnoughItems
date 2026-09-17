@@ -11,6 +11,7 @@ import mezz.jei.api.runtime.IIngredientFilter;
 import mezz.jei.api.runtime.IIngredientListOverlay;
 import mezz.jei.api.runtime.IIngredientManager;
 import mezz.jei.api.runtime.IIngredientVisibility;
+import mezz.jei.api.runtime.IPinnedIngredientOrderConfig;
 import mezz.jei.api.runtime.IRecipesGui;
 import mezz.jei.api.runtime.IScreenHelper;
 import mezz.jei.api.search.ISearchStorageBuilderFactory;
@@ -108,6 +109,15 @@ public interface IRuntimeRegistration {
 	 * This is used by JEI's GUI and can be used by other mods that want to use the same information from JEI.
 	 */
 	IEditModeConfig getEditModeConfig();
+
+	/**
+	 * Get access to the pinned ingredient order config, which lets users pin specific
+	 * ingredients to a fixed position in JEI's ingredient list.
+	 * This is used by JEI's GUI and can be used by other mods that want to use the same information from JEI.
+	 *
+	 * @since 19.56.0
+	 */
+	IPinnedIngredientOrderConfig getIngredientOrderConfig();
 
 	/**
 	 * Get the search storage factory used by JEI's ingredient filter.

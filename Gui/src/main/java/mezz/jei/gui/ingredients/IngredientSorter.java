@@ -1,6 +1,7 @@
 package mezz.jei.gui.ingredients;
 
 import mezz.jei.api.runtime.IIngredientManager;
+import mezz.jei.api.runtime.IPinnedIngredientOrderConfig;
 import mezz.jei.common.config.IClientConfig;
 import mezz.jei.common.config.IngredientSortStage;
 import mezz.jei.gui.config.IngredientTypeSortingConfig;
@@ -18,6 +19,7 @@ public final class IngredientSorter {
 		IClientConfig clientConfig,
 		ModNameSortingConfig modNameSortingConfig,
 		IngredientTypeSortingConfig ingredientTypeSortingConfig,
+		IPinnedIngredientOrderConfig pinnedIngredientOrderConfig,
 		IIngredientManager ingredientManager,
 		List<IListElementInfo<?>> ingredients
 	) {
@@ -25,7 +27,7 @@ public final class IngredientSorter {
 			.map(IListElementInfo::getModNameForSorting)
 			.collect(Collectors.toSet());
 
-		IngredientSorterComparators comparators = new IngredientSorterComparators(ingredientManager, modNameSortingConfig, ingredientTypeSortingConfig, modNames);
+		IngredientSorterComparators comparators = new IngredientSorterComparators(ingredientManager, modNameSortingConfig, ingredientTypeSortingConfig, pinnedIngredientOrderConfig, modNames);
 
 		List<IngredientSortStage> ingredientSorterStages = clientConfig.ingredientSorterStages().get();
 
