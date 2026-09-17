@@ -577,6 +577,11 @@ public class IngredientFilterTest {
 		public void load(EditModeConfig config) {
 
 		}
+
+		@Override
+		public java.util.Optional<Object> computeStrictKey(ITypedIngredient<?> ingredient) {
+			return java.util.Optional.empty();
+		}
 	}
 
 	private static class TestSortingConfig implements ISortingConfig<String> {

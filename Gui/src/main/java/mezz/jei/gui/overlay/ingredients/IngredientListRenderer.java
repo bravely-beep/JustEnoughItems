@@ -144,7 +144,8 @@ public class IngredientListRenderer {
 		Set<IEditModeConfig.HideMode> hideModes = config.getIngredientHiddenUsingConfigFile(typedIngredient);
 		if (!hideModes.isEmpty()) {
 			boolean wildcard = hideModes.contains(IEditModeConfig.HideMode.WILDCARD);
-			boolean single = hideModes.contains(IEditModeConfig.HideMode.SINGLE);
+			boolean single = hideModes.contains(IEditModeConfig.HideMode.SINGLE)
+				|| hideModes.contains(IEditModeConfig.HideMode.STRICT);
 			int wildcardColor = JeiGuiColors.getColor(GuiColor.EDIT_MODE_HIDDEN_WILDCARD_OVERLAY);
 			int singleColor = JeiGuiColors.getColor(GuiColor.EDIT_MODE_HIDDEN_INGREDIENT_OVERLAY);
 			if (wildcard && single) {

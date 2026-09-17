@@ -33,13 +33,16 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 public class EditModeConfig implements IEditModeConfig {
 	private static final Logger LOGGER = LogManager.getLogger();
 	private static final int VERSION = 2;
 
 	private final Map<Object, Pair<HideMode, ITypedIngredient<?>>> blacklist = new LinkedHashMap<>();
+	private final Map<Object, ITypedIngredient<?>> strictBlacklist = new LinkedHashMap<>();
 	private final ISerializer serializer;
 	private final IIngredientManager ingredientManager;
 	private WeakReference<IngredientVisibility> ingredientVisibilityRef = new WeakReference<>(null);
@@ -71,6 +74,15 @@ public class EditModeConfig implements IEditModeConfig {
 		HideMode blacklistType,
 		IIngredientHelper<V> ingredientHelper
 	) {
+		if (blacklistType == HideMode.STRICT) {
+			Optional<Object> strictKey = serializer.computeStrictKey(typedIngredient);
+			if (strictKey.isEmpty()) {
+				LOGGER.warn("Could not compute a strict blacklist key for ingredient: {}", ingredientHelper.getErrorInfo(typedIngredient.getIngredient()));
+				return false;
+			}
+			return strictBlacklist.put(strictKey.get(), typedIngredient) == null;
+		}
+
 		Object wildcardUid = getIngredientUid(typedIngredient, HideMode.WILDCARD, ingredientHelper);
 		Object uid = getIngredientUid(typedIngredient, HideMode.SINGLE, ingredientHelper);
 		if (wildcardUid.equals(uid)) {
@@ -88,7 +100,13 @@ public class EditModeConfig implements IEditModeConfig {
 	}
 
 	public <V> boolean isIngredientOnConfigBlacklist(ITypedIngredient<V> typedIngredient, IIngredientHelper<V> ingredientHelper) {
+		if (isIngredientOnStrictBlacklist(typedIngredient)) {
+			return true;
+		}
 		for (HideMode hideMode : HideMode.values()) {
+			if (hideMode == HideMode.STRICT) {
+				continue;
+			}
 			if (isIngredientOnConfigBlacklist(typedIngredient, hideMode, ingredientHelper)) {
 				return true;
 			}
@@ -96,18 +114,32 @@ public class EditModeConfig implements IEditModeConfig {
 		return false;
 	}
 
+	private <V> boolean isIngredientOnStrictBlacklist(ITypedIngredient<V> typedIngredient) {
+		if (strictBlacklist.isEmpty()) {
+			return false;
+		}
+		return serializer.computeStrictKey(typedIngredient)
+			.map(strictBlacklist::containsKey)
+			.orElse(false);
+	}
+
 	private <V> Set<HideMode> getIngredientOnConfigBlacklist(ITypedIngredient<V> ingredient, IIngredientHelper<V> ingredientHelper) {
 		final Object singleUid = getIngredientUid(ingredient, HideMode.SINGLE, ingredientHelper);
 		final Object wildcardUid = getIngredientUid(ingredient, HideMode.WILDCARD, ingredientHelper);
+
+		Set<HideMode> set = new HashSet<>();
+		if (isIngredientOnStrictBlacklist(ingredient)) {
+			set.add(HideMode.STRICT);
+		}
 		if (singleUid.equals(wildcardUid)) {
 			if (blacklist.containsKey(singleUid)) {
 				// there's only one type of this ingredient, adding it as SINGLE is the same as adding it as WILDCARD.
-				return Set.of(HideMode.SINGLE, HideMode.WILDCARD);
+				set.add(HideMode.SINGLE);
+				set.add(HideMode.WILDCARD);
 			}
-			return Set.of();
+			return Collections.unmodifiableSet(set);
 		}
 
-		Set<HideMode> set = new HashSet<>();
 		if (blacklist.containsKey(singleUid)) {
 			set.add(HideMode.SINGLE);
 		}
@@ -118,6 +150,9 @@ public class EditModeConfig implements IEditModeConfig {
 	}
 
 	public <V> boolean isIngredientOnConfigBlacklist(ITypedIngredient<V> typedIngredient, HideMode blacklistType, IIngredientHelper<V> ingredientHelper) {
+		if (blacklistType == HideMode.STRICT) {
+			return isIngredientOnStrictBlacklist(typedIngredient);
+		}
 		final Object uid = getIngredientUid(typedIngredient, blacklistType, ingredientHelper);
 		return blacklist.containsKey(uid);
 	}
@@ -126,6 +161,7 @@ public class EditModeConfig implements IEditModeConfig {
 		return switch (blacklistType) {
 			case SINGLE -> ingredientHelper.getUid(typedIngredient, UidContext.Ingredient);
 			case WILDCARD -> ingredientHelper.getGroupingUid(typedIngredient);
+			case STRICT -> throw new IllegalArgumentException("STRICT hide mode does not use getUid; use computeStrictKey instead");
 		};
 	}
 
@@ -158,8 +194,18 @@ public class EditModeConfig implements IEditModeConfig {
 		ITypedIngredient<V> checkedIngredient = TypedIngredientUtil.checkTypedIngredientFromApi(ingredientManager, ingredient);
 		IIngredientType<V> type = checkedIngredient.getType();
 		IIngredientHelper<V> ingredientHelper = ingredientManager.getIngredientHelper(type);
-		final Object blacklistUid = getIngredientUid(checkedIngredient, hideMode, ingredientHelper);
-		if (blacklist.remove(blacklistUid) != null) {
+
+		boolean removed;
+		if (hideMode == HideMode.STRICT) {
+			removed = serializer.computeStrictKey(checkedIngredient)
+				.map(strictBlacklist::remove)
+				.isPresent();
+		} else {
+			final Object blacklistUid = getIngredientUid(checkedIngredient, hideMode, ingredientHelper);
+			removed = blacklist.remove(blacklistUid) != null;
+		}
+
+		if (removed) {
 			serializer.save(this);
 			notifyListenersOfVisibilityChange(checkedIngredient, true);
 		}
@@ -173,21 +219,30 @@ public class EditModeConfig implements IEditModeConfig {
 		void initialize(EditModeConfig config);
 		void save(EditModeConfig config);
 		void load(EditModeConfig config);
+
+		/**
+		 * Computes an opaque key for {@link HideMode#STRICT} matching, based on the ingredient's full
+		 * encoded representation. Two ingredients with the same strict key are considered identical for
+		 * {@link HideMode#STRICT} purposes; returns {@link Optional#empty()} if the ingredient can't be encoded.
+		 */
+		Optional<Object> computeStrictKey(ITypedIngredient<?> ingredient);
 	}
 
 	public static class FileSerializer implements ISerializer {
 		private final Path path;
+		private final Codec<ITypedIngredient<?>> typedIngredientCodec;
 		private final Codec<Pair<HideMode, ITypedIngredient<?>>> codec;
 		private final RegistryOps<JsonElement> registryOps;
 
 		public FileSerializer(Path path, RegistryAccess registryAccess, ICodecHelper codecHelper) {
 			this.path = path;
+			this.typedIngredientCodec = codecHelper.getTypedIngredientCodec().codec();
 			this.codec = RecordCodecBuilder.create(builder -> {
 				return builder.group(
 						EnumCodec.create(HideMode.class)
 							.fieldOf("hide_mode")
 							.forGetter(Pair::getFirst),
-						codecHelper.getTypedIngredientCodec().codec()
+						typedIngredientCodec
 							.fieldOf("ingredient")
 							.forGetter(Pair::getSecond)
 					)
@@ -206,10 +261,16 @@ public class EditModeConfig implements IEditModeConfig {
 		@Override
 		public void save(EditModeConfig config) {
 			try {
+				List<Pair<HideMode, ITypedIngredient<?>>> entries = Stream.concat(
+					config.blacklist.values().stream(),
+					config.strictBlacklist.values().stream()
+						.map(ingredient -> new Pair<HideMode, ITypedIngredient<?>>(HideMode.STRICT, ingredient))
+				).toList();
+
 				JsonArrayFileHelper.write(
 					path,
 					VERSION,
-					config.blacklist.values(),
+					entries,
 					codec,
 					registryOps,
 					error -> {
@@ -223,6 +284,13 @@ public class EditModeConfig implements IEditModeConfig {
 			} catch (RuntimeException | IOException e) {
 				LOGGER.error("Failed to save blacklist config to file {}", path, e);
 			}
+		}
+
+		@Override
+		public Optional<Object> computeStrictKey(ITypedIngredient<?> ingredient) {
+			return typedIngredientCodec.encodeStart(registryOps, ingredient)
+				.result()
+				.map(jsonElement -> (Object) jsonElement);
 		}
 
 		@Override

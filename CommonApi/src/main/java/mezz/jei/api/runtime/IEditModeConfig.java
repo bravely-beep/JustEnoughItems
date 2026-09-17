@@ -76,6 +76,17 @@ public interface IEditModeConfig {
 		 *
 		 * @since 11.5.0
 		 */
-		WILDCARD
+		WILDCARD,
+		/**
+		 * Hides or shows a single item by comparing its full encoded (component/NBT-aware) representation
+		 * directly, bypassing {@link IIngredientHelper#getUid} and any registered subtype interpreter.
+		 * <p>
+		 * Useful for ingredients where {@link #SINGLE} cannot distinguish this variant from others,
+		 * for example because the ingredient's subtype interpreter returns no distinguishing data for it
+		 * (which can otherwise cause {@link #SINGLE} to be treated the same as {@link #WILDCARD}).
+		 *
+		 * @since 19.56.0
+		 */
+		STRICT
 	}
 }
