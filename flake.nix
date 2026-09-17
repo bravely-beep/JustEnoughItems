@@ -17,6 +17,7 @@
           packages = [
             jdk
             pkgs.git
+            pkgs.gh
           ];
           JAVA_HOME = jdk.home;
         };
