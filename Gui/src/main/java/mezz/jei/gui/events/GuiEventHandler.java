@@ -39,12 +39,12 @@ public class GuiEventHandler {
 		IScreenHelper screenHelper,
 		BookmarkOverlay bookmarkOverlay,
 		IngredientListOverlay ingredientListOverlay,
-		IGuiInputLayer... inputLayers
+		List<IGuiInputLayer> inputLayers
 	) {
 		this.screenHelper = screenHelper;
 		this.bookmarkOverlay = bookmarkOverlay;
 		this.ingredientListOverlay = ingredientListOverlay;
-		this.inputLayers = List.of(inputLayers);
+		this.inputLayers = List.copyOf(inputLayers);
 	}
 
 	public void onGuiInit(Screen screen) {
@@ -187,8 +187,8 @@ public class GuiEventHandler {
 		}
 	}
 
-	public boolean renderCompactPotionIndicators() {
-		return ingredientListOverlay.isListDisplayed();
+	public boolean renderCompactPotionIndicators(AbstractContainerScreen<?> screen) {
+		return ingredientListOverlay.shouldRenderCompactInventoryEffects(screen);
 	}
 
 	private void drawDebugInfoForScreen(Screen screen, @Nullable IGuiProperties guiProperties, GuiGraphics guiGraphics) {

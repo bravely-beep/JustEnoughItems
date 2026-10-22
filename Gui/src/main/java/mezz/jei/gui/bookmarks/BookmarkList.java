@@ -7,7 +7,6 @@ import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.recipe.IFocusFactory;
 import mezz.jei.api.recipe.IRecipeManager;
 import mezz.jei.api.recipe.RecipeType;
-import mezz.jei.api.runtime.IBookmarkManager;
 import mezz.jei.api.runtime.IIngredientManager;
 import mezz.jei.common.input.UserInput;
 import mezz.jei.common.config.IClientConfig;
@@ -22,9 +21,10 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
-public class BookmarkList implements IIngredientGridSource, IBookmarkManager {
+public class BookmarkList implements IIngredientGridSource {
 	private final List<IBookmark> bookmarksList = new LinkedList<>();
 	private final Set<IBookmark> bookmarksSet = new HashSet<>();
 
@@ -78,31 +78,28 @@ public class BookmarkList implements IIngredientGridSource, IBookmarkManager {
 			return;
 		}
 		int i = bookmarksList.indexOf(previousBookmark);
-		int j = bookmarksList.indexOf(newBookmark);
-		int newIndex = i + offset;
-		if (newIndex == j) {
+		moveBookmark(newBookmark, Math.floorMod(i + offset, bookmarksList.size()));
+	}
+
+	public void moveBookmark(IBookmark bookmark, int index) {
+		int oldIndex = bookmarksList.indexOf(bookmark);
+		if (oldIndex < 0 || oldIndex == index) {
 			return;
 		}
-
-		if (newIndex < 0) {
-			newIndex += bookmarksList.size();
-		}
-		newIndex %= bookmarksList.size();
-
-		bookmarksList.remove(newBookmark);
-		bookmarksList.add(newIndex, newBookmark);
+		Objects.checkIndex(index, bookmarksList.size());
+		bookmarksList.remove(oldIndex);
+		bookmarksList.add(index, bookmark);
 
 		notifyListenersOfChange();
 		bookmarkConfig.saveBookmarks(recipeManager, focusFactory, guiHelper, ingredientManager, registryAccess, codecHelper, bookmarksList, bookmarkCodec);
 	}
 
-	public boolean contains(IBookmark value) {
-		return this.bookmarksSet.contains(value);
+	public void moveBookmarkToFront(IBookmark value) {
+		moveBookmark(value, 0);
 	}
 
-	@Override
-	public boolean contains(ITypedIngredient<?> ingredient) {
-		return contains(bookmarkFactory.create(ingredient));
+	public boolean contains(IBookmark value) {
+		return this.bookmarksSet.contains(value);
 	}
 
 	public <T> boolean onElementBookmarked(IElement<T> element, UserInput input, BookmarkOverlay bookmarkOverlay) {
@@ -113,12 +110,6 @@ public class BookmarkList implements IIngredientGridSource, IBookmarkManager {
 		}
 
 		ITypedIngredient<T> ingredient = element.getTypedIngredient();
-		IBookmark bookmark = bookmarkFactory.create(ingredient);
-		return add(bookmark);
-	}
-
-	@Override
-	public boolean add(ITypedIngredient<?> ingredient) {
 		IBookmark bookmark = bookmarkFactory.create(ingredient);
 		return add(bookmark);
 	}
@@ -139,11 +130,6 @@ public class BookmarkList implements IIngredientGridSource, IBookmarkManager {
 		notifyListenersOfChange();
 		bookmarkConfig.saveBookmarks(recipeManager, focusFactory, guiHelper, ingredientManager, registryAccess, codecHelper, bookmarksList, bookmarkCodec);
 		return true;
-	}
-
-	@Override
-	public boolean remove(ITypedIngredient<?> ingredient) {
-		return remove(bookmarkFactory.create(ingredient));
 	}
 
 	public void setFromConfigFile(List<IBookmark> bookmarks) {

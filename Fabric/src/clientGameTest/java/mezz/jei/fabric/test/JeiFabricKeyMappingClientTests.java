@@ -2,6 +2,10 @@ package mezz.jei.fabric.test;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import mezz.jei.common.Internal;
+import mezz.jei.common.util.ReflectionUtil;
+import mezz.jei.gui.input.GuiTextFieldFilter;
+import mezz.jei.gui.overlay.IngredientListOverlay;
+import mezz.jei.test.client.TextInputTestUtil;
 import mezz.jei.common.input.keys.IJeiKeyMappingBuilder;
 import mezz.jei.common.input.keys.IJeiKeyMappingInternal;
 import mezz.jei.common.input.keys.JeiKeyConflictContext;
@@ -36,7 +40,7 @@ final class JeiFabricKeyMappingClientTests {
 	private static final String JUNIT_SUITE_NAME = "fabric-client-key-mapping";
 	private static final String TEST_NAME = "JeiFabricKeyMappingClientTests";
 	private static final String CATEGORY = "key.categories.jei.test.key_mapping";
-	private static final ResourceLocation GUI_BACKGROUND_TEXTURE = ResourceLocation.fromNamespaceAndPath("jei", "textures/jei/atlas/gui/gui_background_v2.png");
+	private static final ResourceLocation GUI_BACKGROUND_TEXTURE = ResourceLocation.fromNamespaceAndPath("jei", "textures/gui/sprites/gui_background_v2.png");
 	private static final String FOCUS_SEARCH_TRANSLATION_KEY = "key.jei.focusSearch";
 	private static final Duration ASSERTION_TIMEOUT = Duration.ofSeconds(60);
 
@@ -87,6 +91,13 @@ final class JeiFabricKeyMappingClientTests {
 	}
 
 	private static void assertJeiResourcesAreLoaded(Minecraft client) {
+		ResourceLocation slotId = ResourceLocation.fromNamespaceAndPath("jei", "slot");
+		if (!client.getGuiSprites().getSprite(slotId).contents().name().equals(slotId)) {
+			int resourceCount = client.getResourceManager()
+				.listResources("textures/gui/sprites", id -> id.getPath().endsWith(".png"))
+				.size();
+			throw new AssertionError("Expected JEI's slot texture to be stitched in Minecraft's GUI atlas; found " + resourceCount + " source textures.");
+		}
 		if (client.getResourceManager().getResource(GUI_BACKGROUND_TEXTURE).isEmpty()) {
 			throw new AssertionError("Expected the Fabric development mod to include JEI's Common textures.");
 		}
@@ -149,12 +160,12 @@ final class JeiFabricKeyMappingClientTests {
 				throw new AssertionError("Expected the focus-search hotkey character to be consumed, got: " + filterText);
 			}
 
-			FabricClientTestInput.pressKey(GLFW.GLFW_KEY_X);
-			FabricClientTestInput.typeChar('x');
-			filterText = ClientTestUtil.computeOnClient(client -> Internal.getJeiRuntime().getIngredientFilter().getFilterText());
-			if (!filterText.equals("x")) {
-				throw new AssertionError("Expected normal typing to resume after the focus-search character, got: " + filterText);
-			}
+			ClientTestUtil.runOnClient(client -> {
+				IngredientListOverlay overlay = (IngredientListOverlay) Internal.getJeiRuntime().getIngredientListOverlay();
+				GuiTextFieldFilter searchField = new ReflectionUtil().getFieldWithClass(overlay, GuiTextFieldFilter.class)
+					.findFirst().orElseThrow(() -> new AssertionError("Expected JEI's search field."));
+				TextInputTestUtil.typePlainText(client.keyboardHandler, client.getWindow().getWindow(), searchField);
+			});
 		}
 	}
 
@@ -431,11 +442,14 @@ final class JeiFabricKeyMappingClientTests {
 		// Operation: ask JEI whether the mapping accepts the real input key before and after holding the modifier.
 		boolean isUnbound = ClientTestUtil.computeOnClient(client -> jeiMapping.isUnbound());
 		boolean matchesWithoutModifier = ClientTestUtil.computeOnClient(client -> jeiMapping.isActiveAndMatches(mapping.boundKey()));
+		boolean relaxedMatchesWithoutModifier = ClientTestUtil.computeOnClient(client -> jeiMapping.isActiveAndMatchesAllowingExtraModifiers(mapping.boundKey()));
 		FabricClientTestInput.holdModifier(modifier);
 		boolean matchesWithModifier;
+		boolean relaxedMatchesWithModifier;
 		boolean matchesUnknownKey;
 		try {
 			matchesWithModifier = ClientTestUtil.computeOnClient(client -> jeiMapping.isActiveAndMatches(mapping.boundKey()));
+			relaxedMatchesWithModifier = ClientTestUtil.computeOnClient(client -> jeiMapping.isActiveAndMatchesAllowingExtraModifiers(mapping.boundKey()));
 			matchesUnknownKey = ClientTestUtil.computeOnClient(client -> jeiMapping.isActiveAndMatches(InputConstants.UNKNOWN));
 		} finally {
 			FabricClientTestInput.releaseModifier(modifier);
@@ -464,6 +478,9 @@ final class JeiFabricKeyMappingClientTests {
 				if (matchesWithModifier) {
 					throw new AssertionError("Expected unsupported modified key mapping to reject input with its modifier held.");
 				}
+			}
+			if (relaxedMatchesWithoutModifier || relaxedMatchesWithModifier != matchesWithModifier) {
+				throw new AssertionError("Relaxed matching must preserve required modifiers and unsupported mappings");
 			}
 			if (matchesUnknownKey) {
 				throw new AssertionError("Expected modified key mapping to reject the UNKNOWN key.");

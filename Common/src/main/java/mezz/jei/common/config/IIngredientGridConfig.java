@@ -13,7 +13,7 @@ public interface IIngredientGridConfig {
 
 	int getMinRows();
 
-	IConfigValue<Boolean> drawBackground();
+	IConfigValue<IngredientGridBackgroundStyle> backgroundStyle();
 
 	IConfigValue<IngredientGridLayoutMode> layoutMode();
 
@@ -24,4 +24,6 @@ public interface IIngredientGridConfig {
 	IConfigValue<NavigationVisibility> navigationVisibility();
 
 	IConfigValue<IngredientGridNavigationMode> navigationMode();
+
+	IConfigValue<Boolean> shrinkToFit();
 }

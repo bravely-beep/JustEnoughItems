@@ -1,3 +1,4 @@
+import mezz.jei.gradle.gradleProperty
 import mezz.jei.gradle.ValidateApiCompatibilityReports
 import net.neoforged.jarcompatibilitychecker.core.NonExtendableApiCheckMode
 import net.neoforged.jarcompatibilitychecker.gradle.CompatibilityTask
@@ -10,24 +11,22 @@ plugins {
     id("com.dorongold.task-tree") version("4.0.2")
 
     // https://maven.fabricmc.net/fabric-loom/fabric-loom.gradle.plugin/maven-metadata.xml
-    // Loom 1.14+ requires Gradle 9, but ForgeGradle 6 requires Gradle 8.
-    id("fabric-loom") version("1.13.6") apply(false)
+    id("fabric-loom") version("1.18.2") apply(false)
 
     // https://projects.neoforged.net/neoforged/moddevgradle
-    id("net.neoforged.moddev") version("2.0.144") apply(false)
+    id("net.neoforged.moddev") version("2.0.148") apply(false)
 
     id("net.mezzdev.modshade") version("0.7.0") apply(false)
 
     // https://plugins.gradle.org/plugin/me.modmuss50.mod-publish-plugin
-    id("me.modmuss50.mod-publish-plugin") version("2.2.0") apply(false)
+    id("me.modmuss50.mod-publish-plugin") version("2.2.1") apply(false)
 
-    // https://files.minecraftforge.net/net/minecraftforge/gradle/ForgeGradle/index.html
-    id("net.minecraftforge.gradle") version("6.0.54") apply(false)
+    // https://plugins.gradle.org/plugin/net.minecraftforge.gradle
+    id("net.minecraftforge.accesstransformers") version("5.0.3") apply(false)
+    id("net.minecraftforge.gradle") version("7.0.40") apply(false)
+    id("net.minecraftforge.jarjar") version("0.2.3") apply(false)
 
-    // https://mvnrepository.com/artifact/org.parchmentmc.librarian.forgegradle/org.parchmentmc.librarian.forgegradle.gradle.plugin
-    id("org.parchmentmc.librarian.forgegradle") version("1.2.0") apply(false)
-
-    id("net.neoforged.jarcompatibilitychecker") version("0.1.19") apply(false)
+    id("net.neoforged.jarcompatibilitychecker") version("0.1.23") apply(false)
 }
 
 javaFormatting {
@@ -52,42 +51,47 @@ allprojects {
     }
 }
 // gradle.properties
-val curseHomepageUrl: String by extra
-val curseProjectId: String by extra
-val configModId: String by extra
-val configModGroup: String by extra
-val amecsKeyModifiersVersionFabric: String by extra
-val amecsVersionFabric: String by extra
-val fabricApiVersion: String by extra
-val fabricApiVersionRange: String by extra
-val fabricLoaderVersion: String by extra
-val fabricLoaderVersionRange: String by extra
-val forgeVersion: String by extra
-val forgeVersionRange: String by extra
-val githubUrl: String by extra
-val forgeLoaderVersionRange: String by extra
-val neoforgeVersionRange: String by extra
-val neoforgeLoaderVersionRange: String by extra
-val parchmentVersionForge: String by extra
-val minecraftVersion: String by extra
-val minecraftVersionRange: String by extra
-val modAuthor: String by extra
-val modDescription: String by extra
-val modGroup: String by extra
-val modId: String by extra
-val modJavaVersion: String by extra
-val modName: String by extra
-val mezzConfigVersion: String by extra
-val mezzConfigVersionRange: String by extra
-val mezzConfigFabricVersionRange: String by extra
-val specificationVersion: String by extra
+val curseHomepageUrl = gradleProperty("curseHomepageUrl")
+val curseProjectId = gradleProperty("curseProjectId")
+val configModId = gradleProperty("configModId")
+val configGuiModId = gradleProperty("configGuiModId")
+val configModGroup = gradleProperty("configModGroup")
+val amecsKeyModifiersVersionFabric = gradleProperty("amecsKeyModifiersVersionFabric")
+val amecsVersionFabric = gradleProperty("amecsVersionFabric")
+val fabricApiVersion = gradleProperty("fabricApiVersion")
+val fabricApiVersionRange = gradleProperty("fabricApiVersionRange")
+val fabricLoaderVersion = gradleProperty("fabricLoaderVersion")
+val fabricLoaderVersionRange = gradleProperty("fabricLoaderVersionRange")
+val forgeVersion = gradleProperty("forgeVersion")
+val forgeVersionRange = gradleProperty("forgeVersionRange")
+val githubUrl = gradleProperty("githubUrl")
+val forgeLoaderVersionRange = gradleProperty("forgeLoaderVersionRange")
+val neoforgeVersionRange = gradleProperty("neoforgeVersionRange")
+val neoforgeLoaderVersionRange = gradleProperty("neoforgeLoaderVersionRange")
+val minecraftVersion = gradleProperty("minecraftVersion")
+val minecraftVersionRange = gradleProperty("minecraftVersionRange")
+val modAuthor = gradleProperty("modAuthor")
+val modDescription = gradleProperty("modDescription")
+val modGroup = gradleProperty("modGroup")
+val modId = gradleProperty("modId")
+val modJavaVersion = gradleProperty("modJavaVersion")
+val modName = gradleProperty("modName")
+val mezzConfigVersion = gradleProperty("mezzConfigVersion")
+val mezzConfigVersionRange = gradleProperty("mezzConfigVersionRange")
+val mezzConfigFabricVersionRange = gradleProperty("mezzConfigFabricVersionRange")
+val mezzConfigGuiVersion = gradleProperty("mezzConfigGuiVersion")
+val mezzConfigGuiMinimumVersion = gradleProperty("mezzConfigGuiMinimumVersion")
+val specificationVersion = gradleProperty("specificationVersion")
 
 val mezzConfigApiDependency = "$configModGroup:${configModId}-${minecraftVersion}-config-api:$mezzConfigVersion"
 extra["mezzConfigApiDependency"] = mezzConfigApiDependency
-extra["mezzConfigDependency"] = "$configModGroup:${configModId}-${minecraftVersion}-config:$mezzConfigVersion"
 extra["mezzConfigFabricDependency"] = "$configModGroup:${configModId}-${minecraftVersion}-fabric:$mezzConfigVersion"
 extra["mezzConfigForgeDependency"] = "$configModGroup:${configModId}-${minecraftVersion}-forge:$mezzConfigVersion"
 extra["mezzConfigNeoForgeDependency"] = "$configModGroup:${configModId}-${minecraftVersion}-neoforge:$mezzConfigVersion"
+extra["mezzConfigGuiApiDependency"] = "$configModGroup:${configGuiModId}-${minecraftVersion}-config-gui-api:$mezzConfigGuiVersion"
+extra["mezzConfigGuiFabricDependency"] = "$configModGroup:${configGuiModId}-${minecraftVersion}-fabric:$mezzConfigGuiVersion"
+extra["mezzConfigGuiForgeDependency"] = "$configModGroup:${configGuiModId}-${minecraftVersion}-forge:$mezzConfigGuiVersion"
+extra["mezzConfigGuiNeoForgeDependency"] = "$configModGroup:${configGuiModId}-${minecraftVersion}-neoforge:$mezzConfigGuiVersion"
 
 subprojects {
     //adds the build number to the end of the version string if on a build server
@@ -131,6 +135,7 @@ subprojects {
             "amecsKeyModifiersVersionFabric" to amecsKeyModifiersVersionFabric,
             "amecsVersionFabric" to amecsVersionFabric,
             "curseHomepageUrl" to curseHomepageUrl,
+            "configGuiModId" to configGuiModId,
             "configModId" to configModId,
             "fabricApiVersion" to fabricApiVersion,
             "fabricApiVersionRange" to fabricApiVersionRange,
@@ -148,6 +153,9 @@ subprojects {
             "modId" to modId,
             "modJavaVersion" to modJavaVersion,
             "modName" to modName,
+            "mezzConfigGuiVersionRange" to "[$mezzConfigGuiMinimumVersion,)",
+            "mezzConfigGuiFabricVersionRange" to ">=$mezzConfigGuiMinimumVersion",
+            "mezzConfigGuiFabricBreaksVersionRange" to "<$mezzConfigGuiMinimumVersion",
             "mezzConfigVersionRange" to mezzConfigVersionRange,
             "mezzConfigFabricVersionRange" to mezzConfigFabricVersionRange,
             "version" to version,
@@ -173,7 +181,7 @@ subprojects {
     }
 }
 
-val apiProjectPaths = listOf(":CommonApi", ":FabricApi", ":NeoForgeApi", ":ForgeApi")
+val apiProjectPaths = listOf(":Common", ":Fabric", ":NeoForge", ":Forge")
 val apiCompatibilityReports = apiProjectPaths.associateWith { apiProjectPath ->
     project(apiProjectPath).layout.buildDirectory.file("checkJarCompatibility/output.json")
 }
@@ -186,6 +194,9 @@ apiProjectPaths.forEach { apiProjectPath ->
             group = LifecycleBasePlugin.VERIFICATION_GROUP
             description = "Checks $apiProjectPath against the latest published API jar in the same major version."
             output.set(apiCompatibilityReports.getValue(apiProjectPath))
+            val apiJarTaskName = if (apiProjectPath == ":Fabric") "remapApiJar" else "apiJar"
+            inputJar.set(apiProject.tasks.named<AbstractArchiveTask>(apiJarTaskName).flatMap { it.archiveFile })
+            artifact.set("${modGroup}:${modId}-${minecraftVersion}-${apiProject.name.lowercase()}-api")
             mavens.set(listOf("https://maven.blamejared.com"))
             // Match the previous CLI check and avoid loading the full Minecraft compile classpath.
             libraries.setFrom(emptyList<Any>())
@@ -201,7 +212,7 @@ val checkApiCompatibility = tasks.register<ValidateApiCompatibilityReports>("che
     dependsOn(apiProjectPaths.map { "$it:checkJarCompatibility" })
     reportFiles.from(apiCompatibilityReports.values)
     apiSourceFiles.from(apiProjectPaths.map { apiProjectPath ->
-        project(apiProjectPath).fileTree("src/main/java") {
+        project(apiProjectPath).fileTree("src/api/java") {
             include("**/*.java")
         }
     })

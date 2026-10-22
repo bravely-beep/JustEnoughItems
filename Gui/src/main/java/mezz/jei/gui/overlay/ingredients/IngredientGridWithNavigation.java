@@ -1,5 +1,6 @@
 package mezz.jei.gui.overlay.ingredients;
 
+import mezz.jei.api.gui.placement.VerticalAlignment;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.runtime.IIngredientManager;
 import mezz.jei.api.runtime.IScreenHelper;
@@ -7,26 +8,35 @@ import mezz.jei.common.Internal;
 import mezz.jei.common.config.IClientConfig;
 import mezz.jei.common.config.IClientToggleState;
 import mezz.jei.common.config.IIngredientGridConfig;
-import mezz.jei.common.gui.elements.ScalableDrawable;
+import mezz.jei.common.config.IngredientGridBackgroundStyle;
+import mezz.jei.common.input.IInputTarget;
+import mezz.jei.common.input.IInternalKeyMappings;
+import mezz.jei.common.input.UserInput;
+import mezz.jei.common.input.handlers.InputGroup;
+import mezz.jei.common.input.interaction.IInputInteraction;
 import mezz.jei.common.network.IConnectionToServer;
 import mezz.jei.common.util.ImmutablePoint2i;
 import mezz.jei.common.util.ImmutableRect2i;
+import mezz.jei.common.util.ImmutableSize2i;
 import mezz.jei.gui.PageNavigation;
+import mezz.jei.gui.elements.ScrollbarWidget;
 import mezz.jei.gui.ghost.GhostIngredientDragManager;
 import mezz.jei.gui.ghost.GhostIngredientQuickMoveManager;
 import mezz.jei.gui.input.IClickableIngredientInternal;
-import mezz.jei.gui.input.IDragHandler;
 import mezz.jei.gui.input.IDraggableIngredientInternal;
 import mezz.jei.gui.input.IPaged;
-import mezz.jei.common.input.IUserInputHandler;
-import mezz.jei.common.input.handlers.CombinedInputHandler;
+import mezz.jei.gui.input.InputCommands;
 import mezz.jei.gui.overlay.elements.IElement;
 import mezz.jei.gui.util.CommandUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
 
 /**
@@ -35,16 +45,17 @@ import java.util.stream.Stream;
 public class IngredientGridWithNavigation implements IIngredientListOverlayContents {
 	private final IngredientGridWithNavigationController controller;
 	private final PageNavigation navigation;
-	private final IngredientGridScrollbar scrollbar;
+	private final ScrollbarWidget scrollbar;
 	private final IIngredientGridConfig gridConfig;
+	private final IngredientGridResizer resizer;
+	private @Nullable ImmutableRect2i resizeArea;
+	private @Nullable VerticalAlignment resizeVerticalAlignment;
+	private final IClientConfig clientConfig;
 	private final IngredientGrid ingredientGrid;
 	private final IIngredientGridSource ingredientSource;
-	private final ScalableDrawable background;
-	private final ScalableDrawable slotBackground;
-	private final ScalableDrawable exclusionAreaShadow;
 	private final CommandUtil commandUtil;
 	private final GhostIngredientDragManager ghostIngredientDragManager;
-	private final IUserInputHandler inputHandler;
+	private final IInputTarget inputHandler;
 
 	private ImmutableRect2i backgroundArea = ImmutableRect2i.EMPTY;
 	private ImmutableRect2i slotBackgroundArea = ImmutableRect2i.EMPTY;
@@ -64,18 +75,14 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 		IClientConfig clientConfig,
 		IConnectionToServer serverConnection,
 		IIngredientGridConfig gridConfig,
-		ScalableDrawable background,
-		ScalableDrawable slotBackground,
-		ScalableDrawable exclusionAreaShadow,
 		IScreenHelper screenHelper,
 		IIngredientManager ingredientManager
 	) {
 		this.ingredientGrid = ingredientGrid;
 		this.ingredientSource = ingredientSource;
 		this.gridConfig = gridConfig;
-		this.background = background;
-		this.slotBackground = slotBackground;
-		this.exclusionAreaShadow = exclusionAreaShadow;
+		this.resizer = new IngredientGridResizer(this, gridConfig, clientConfig);
+		this.clientConfig = clientConfig;
 		this.commandUtil = new CommandUtil(clientConfig, serverConnection);
 		this.ghostIngredientDragManager = new GhostIngredientDragManager(this.ingredientGrid, screenHelper, ingredientManager, toggleState);
 		GhostIngredientQuickMoveManager ghostIngredientQuickMoveManager = new GhostIngredientQuickMoveManager(this.ingredientGrid, screenHelper);
@@ -91,9 +98,9 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 			ghostIngredientQuickMoveManager
 		);
 		this.navigation = new PageNavigation(this.controller, false);
-		this.scrollbar = new IngredientGridScrollbar(this.controller);
+		this.scrollbar = new ScrollbarWidget(this.controller);
 		this.controller.setOnLayoutChanged(this.navigation::updatePageNumber);
-		this.inputHandler = new CombinedInputHandler(
+		this.inputHandler = new InputGroup(
 			debugName,
 			this.scrollbar,
 			this.controller,
@@ -102,21 +109,62 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 
 		this.ingredientSource.addSourceListChangedListener(this::markLayoutDirty);
 		addGridConfigListeners(gridConfig);
+		Internal.registerRuntimeListenerRemoval(clientConfig.guiResizeEnabled().addListener(v -> resizer.resetInput()));
+		Internal.registerRuntimeListenerRemoval(clientConfig.smoothScrollingEnabled().addListener(v -> markLayoutDirty()));
 	}
 
 	private void addGridConfigListeners(IIngredientGridConfig gridConfig) {
 		Internal.registerRuntimeListenerRemoval(gridConfig.maxColumns().addListener(v -> markLayoutDirty()));
 		Internal.registerRuntimeListenerRemoval(gridConfig.maxRows().addListener(v -> markLayoutDirty()));
-		Internal.registerRuntimeListenerRemoval(gridConfig.drawBackground().addListener(v -> markLayoutDirty()));
+		Internal.registerRuntimeListenerRemoval(gridConfig.backgroundStyle().addListener(v -> markLayoutDirty()));
 		Internal.registerRuntimeListenerRemoval(gridConfig.layoutMode().addListener(v -> markLayoutDirty()));
 		Internal.registerRuntimeListenerRemoval(gridConfig.horizontalAlignment().addListener(v -> markLayoutDirty()));
 		Internal.registerRuntimeListenerRemoval(gridConfig.verticalAlignment().addListener(v -> markLayoutDirty()));
 		Internal.registerRuntimeListenerRemoval(gridConfig.navigationVisibility().addListener(v -> markLayoutDirty()));
 		Internal.registerRuntimeListenerRemoval(gridConfig.navigationMode().addListener(v -> markLayoutDirty()));
+		Internal.registerRuntimeListenerRemoval(gridConfig.shrinkToFit().addListener(v -> markLayoutDirty()));
 	}
 
 	private void markLayoutDirty() {
 		this.layoutDirty = true;
+	}
+
+	public void setResizeBounds(ImmutableRect2i area, VerticalAlignment verticalAlignment) {
+		this.resizeArea = area;
+		this.resizeVerticalAlignment = verticalAlignment;
+	}
+
+	VerticalAlignment getResizeVerticalAlignment() {
+		if (resizeVerticalAlignment != null) {
+			return resizeVerticalAlignment;
+		}
+		return gridConfig.verticalAlignment().get();
+	}
+
+	@Override
+	public IInputTarget getResizeInputHandler() {
+		return resizer;
+	}
+
+	boolean isResizeExcluded(double mouseX, double mouseY) {
+		return guiExclusionAreas.stream().anyMatch(area -> area.contains(mouseX, mouseY)) ||
+			(mouseExclusionPoint != null && mouseExclusionPoint.x() == (int) mouseX && mouseExclusionPoint.y() == (int) mouseY);
+	}
+
+	ImmutableSize2i getMaximumResizeSize() {
+		ImmutableRect2i area = resizeArea;
+		if (area == null) {
+			area = availableArea;
+		}
+		if (area == null) {
+			return ImmutableSize2i.EMPTY;
+		}
+		ImmutableRect2i gridArea = ingredientGrid.getArea();
+		int margin = 2 * IngredientGridWithNavigationLayout.BORDER_MARGIN;
+		return new ImmutableSize2i(
+			Math.max(0, area.width() - margin - (backgroundArea.width() - gridArea.width())),
+			Math.max(0, area.height() - margin - (backgroundArea.height() - gridArea.height()))
+		);
 	}
 
 	private void updateLayoutIfDirty() {
@@ -141,6 +189,15 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 	@Override
 	public void updateLayoutKeepingPageAnchorVisible(@Nullable IElement<?> pageAnchorElement) {
 		this.controller.updateLayoutKeepingPageAnchorVisible(pageAnchorElement);
+	}
+
+	public void setPageAnchorElement(IElement<?> pageAnchorElement) {
+		this.controller.setPageAnchorElement(pageAnchorElement);
+	}
+
+	public List<IElement<?>> getPageElements() {
+		updateLayoutIfDirty();
+		return this.controller.getPageElements();
 	}
 
 	@Override
@@ -172,7 +229,8 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 				this.gridConfig,
 				availableArea,
 				guiExclusionAreas,
-				ingredientCount
+				ingredientCount,
+				isSmoothScrolling()
 			);
 		}
 
@@ -195,7 +253,11 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 			return;
 		}
 
-		this.ingredientGrid.updateBounds(layout.ingredientGridArea(), guiExclusionAreas, mouseExclusionPoint);
+		this.ingredientGrid.updateBounds(
+			layout.ingredientGridArea(),
+			guiExclusionAreas,
+			mouseExclusionPoint
+		);
 		this.slotBackgroundArea = layout.slotBackgroundArea();
 		this.navigation.updateBounds(layout.navigationArea());
 		this.scrollbar.updateBounds(layout.scrollbarArea());
@@ -204,6 +266,7 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 	}
 
 	private void clearLayout() {
+		this.resizer.resetInput();
 		this.ingredientGrid.updateBounds(ImmutableRect2i.EMPTY, Set.of(), null);
 		this.slotBackgroundArea = ImmutableRect2i.EMPTY;
 		this.navigation.updateBounds(ImmutableRect2i.EMPTY);
@@ -218,12 +281,17 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 		return this.backgroundArea;
 	}
 
-	@Override
 	public ImmutableRect2i getIngredientGridArea() {
 		updateLayoutIfDirty();
 		return this.ingredientGrid.getArea();
 	}
 
+	@Override
+	public boolean isBackgroundEnabled() {
+		return this.gridConfig.backgroundStyle().get().isEnabled();
+	}
+
+	@Override
 	public ImmutableRect2i getSlotBackgroundArea() {
 		updateLayoutIfDirty();
 		return this.slotBackgroundArea;
@@ -243,17 +311,18 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 		return controller;
 	}
 
-	@Override
-	public void drawBackground(GuiGraphics guiGraphics) {
+	public void scrollByPixels(double pixels) {
 		updateLayoutIfDirty();
-		if (!this.active) {
-			return;
-		}
-		if (this.gridConfig.drawBackground().get()) {
-			this.background.draw(guiGraphics, this.backgroundArea);
-			this.slotBackground.draw(guiGraphics, this.slotBackgroundArea);
-			GuiExclusionAreaShadow.draw(guiGraphics, this.exclusionAreaShadow, this.backgroundArea, this.guiExclusionAreas);
-		}
+		this.controller.scrollByPixels(pixels);
+	}
+
+	private boolean isSmoothScrolling() {
+		return this.gridConfig.navigationMode().get().usesScrollbar() &&
+			this.clientConfig.smoothScrollingEnabled().get();
+	}
+
+	public void setPageButtonsForcePressed(boolean nextButton, boolean backButton) {
+		this.navigation.setForcePressed(nextButton, backButton);
 	}
 
 	@Override
@@ -262,7 +331,8 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 		if (!this.active) {
 			return;
 		}
-		this.ingredientGrid.draw(minecraft, guiGraphics, mouseX, mouseY);
+		boolean drawSlotBackgrounds = this.gridConfig.backgroundStyle().get() == IngredientGridBackgroundStyle.GRID;
+		this.ingredientGrid.draw(minecraft, guiGraphics, mouseX, mouseY, drawSlotBackgrounds);
 		this.scrollbar.draw(guiGraphics, mouseX, mouseY);
 		this.navigation.draw(minecraft, guiGraphics, mouseX, mouseY, partialTicks);
 	}
@@ -274,6 +344,9 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 			return;
 		}
 		this.ghostIngredientDragManager.drawTooltips(minecraft, guiGraphics, mouseX, mouseY);
+		if (this.resizer.isMouseOver(mouseX, mouseY)) {
+			return;
+		}
 		this.ingredientGrid.drawTooltips(minecraft, guiGraphics, mouseX, mouseY);
 	}
 
@@ -288,25 +361,30 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 	public boolean isMouseOver(double mouseX, double mouseY) {
 		updateLayoutIfDirty();
 		return this.active &&
-			this.backgroundArea.contains(mouseX, mouseY) &&
+			(this.backgroundArea.contains(mouseX, mouseY) || this.resizer.isOverResizeHandle(mouseX, mouseY)) &&
 			this.guiExclusionAreas.stream()
 				.noneMatch(area -> area.contains(mouseX, mouseY));
 	}
 
 	@Override
-	public IUserInputHandler createDeleteItemInputHandler() {
+	public IInputTarget createDeleteItemInputHandler() {
 		return this.ingredientGrid.getInputHandler();
 	}
 
 	@Override
-	public IUserInputHandler createInputHandler() {
+	public IInputTarget createInputHandler() {
 		return this.inputHandler;
+	}
+
+	@Override
+	public void registerInputCommands(InputCommands commands, IInternalKeyMappings keys, BooleanSupplier active) {
+		controller.registerInputCommands(commands, keys, active);
 	}
 
 	@Override
 	public Stream<IClickableIngredientInternal<?>> getIngredientUnderMouse(double mouseX, double mouseY) {
 		updateLayoutIfDirty();
-		if (!this.active) {
+		if (!this.active || this.resizer.isMouseOver(mouseX, mouseY)) {
 			return Stream.empty();
 		}
 		return this.ingredientGrid.getIngredientUnderMouse(mouseX, mouseY)
@@ -316,7 +394,7 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 	@Override
 	public Stream<IDraggableIngredientInternal<?>> getDraggableIngredientUnderMouse(double mouseX, double mouseY) {
 		updateLayoutIfDirty();
-		if (!this.active) {
+		if (!this.active || this.resizer.isMouseOver(mouseX, mouseY)) {
 			return Stream.empty();
 		}
 		return this.ingredientGrid.getDraggableIngredientUnderMouse(mouseX, mouseY);
@@ -352,8 +430,8 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 	}
 
 	@Override
-	public IDragHandler createDragHandler() {
-		return this.ghostIngredientDragManager.createDragHandler();
+	public Optional<IInputInteraction> beginDrag(Screen screen, UserInput input) {
+		return this.ghostIngredientDragManager.beginDrag(screen, input);
 	}
 
 	public int size() {
@@ -370,5 +448,13 @@ public class IngredientGridWithNavigation implements IIngredientListOverlayConte
 			return Stream.empty();
 		}
 		return this.ingredientGrid.getSlots();
+	}
+
+	public List<IngredientListSlot> getAllSlots() {
+		updateLayoutIfDirty();
+		if (!this.active) {
+			return List.of();
+		}
+		return this.ingredientGrid.getAllSlots();
 	}
 }

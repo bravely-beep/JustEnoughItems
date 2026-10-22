@@ -7,7 +7,6 @@ import mezz.jei.common.gui.JeiGuiColors;
 import mezz.jei.common.gui.RecipeSlotOptionsTooltipComponent;
 import mezz.jei.common.gui.IngredientTooltipComponent;
 import mezz.jei.common.gui.IngredientsTooltipComponent;
-import mezz.jei.common.gui.textures.Textures;
 import mezz.jei.common.network.IConnectionToServer;
 import mezz.jei.gui.config.InternalKeyMappings;
 import mezz.jei.gui.overlay.bookmarks.PreviewTooltipComponent;
@@ -101,14 +100,11 @@ public class JustEnoughItemsClient {
 
 	private void onRecipesUpdatedEvent(RecipesUpdatedEvent event) {
 		List<RecipeHolder<?>> recipes = List.copyOf(event.getRecipeManager().getRecipes());
-		if (!recipes.isEmpty()) {
-			Internal.setClientSyncedRecipes(recipes);
-		}
+		// Every recipe update is authoritative in 1.21.1, including an empty recipe list.
+		Internal.setClientSyncedRecipes(recipes);
 	}
 
 	private void onRegisterReloadListenerEvent(RegisterClientReloadListenersEvent event) {
-		Textures textures = Internal.getTextures();
-		event.registerReloadListener(textures.getGuiSpriteManager());
 		event.registerReloadListener(createReloadListener());
 	}
 

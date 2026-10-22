@@ -29,6 +29,9 @@
       "mezz.jei.library.plugins.jei.JeiInternalPlugin",
       "mezz.jei.fabric.plugins.fabric.FabricGuiPlugin",
       "mezz.jei.gui.plugins.JeiGuiPlugin"
+    ],
+    "mezz_config_gui_plugin": [
+      "mezz.jei.gui.config.JeiConfigGuiPlugin"
     ]
   },
   "mixins": [
@@ -43,7 +46,11 @@
     "java": ">=${modJavaVersion}"
   },
   "suggests": {
+    "${configGuiModId}": "${mezzConfigGuiFabricVersionRange}",
     "amecsapi": ">=${amecsVersionFabric}",
     "amecs_key_modifiers": ">=${amecsKeyModifiersVersionFabric}"
+  },
+  "breaks": {
+    "${configGuiModId}": "${mezzConfigGuiFabricBreaksVersionRange}"
   }
 }

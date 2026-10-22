@@ -1,3 +1,4 @@
+import mezz.jei.gradle.gradleProperty
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 
@@ -9,14 +10,16 @@ plugins {
 }
 
 // gradle.properties
-val jUnitVersion: String by extra
-val minecraftVersion: String by extra
-val neoformTimestamp: String by extra
-val modId: String by extra
-val modJavaVersion: String by extra
+val jUnitVersion = gradleProperty("jUnitVersion")
+val minecraftVersion = gradleProperty("minecraftVersion")
+val neoformTimestamp = gradleProperty("neoformTimestamp")
+val modId = gradleProperty("modId")
+val modJavaVersion = gradleProperty("modJavaVersion")
+val mixinVersion = gradleProperty("mixinVersion")
 val neoformVersionAndTimestamp = "$minecraftVersion-$neoformTimestamp"
-val deduplicatingRunnerVersion: String by extra
+val deduplicatingRunnerVersion = gradleProperty("deduplicatingRunnerVersion")
 val mezzConfigApiDependency: String by rootProject.extra
+val mezzConfigGuiApiDependency: String by rootProject.extra
 
 val baseArchivesName = "${modId}-${minecraftVersion}-gui"
 base {
@@ -25,11 +28,18 @@ base {
 
 val dependencyProjects: List<Project> = listOf(
     project(":Common"),
-    project(":CommonApi"),
+
 )
 
 dependencyProjects.forEach {
     project.evaluationDependsOn(it.path)
+}
+
+val commonApiSourceSet = project(":Common").sourceSets.named("api").get()
+
+sourceSets.configureEach {
+    compileClasspath += commonApiSourceSet.output
+    runtimeClasspath += commonApiSourceSet.output
 }
 
 neoForge {
@@ -48,15 +58,17 @@ dependencies {
     compileOnly(
         group = "org.spongepowered",
         name = "mixin",
-        version = "0.8.5"
+        version = mixinVersion
     )
     implementation(mezzConfigApiDependency)
+    compileOnly(mezzConfigGuiApiDependency)
     dependencyProjects.forEach {
         implementation(it)
     }
     implementation("net.mezzdev:deduplicating-runner:$deduplicatingRunnerVersion") {
         isTransitive = false
     }
+    testImplementation(mezzConfigGuiApiDependency)
     testCompileOnly(
         group = "org.jetbrains",
         name = "annotations",
@@ -116,7 +128,9 @@ publishing {
             artifact(sourcesJarTask.get())
 
             val dependencyInfos = listOf(
-                dependencyInfo(mezzConfigApiDependency)
+                mapOf("groupId" to project.group, "artifactId" to "${modId}-${minecraftVersion}-common-api", "version" to project.version),
+                dependencyInfo(mezzConfigApiDependency),
+                dependencyInfo(mezzConfigGuiApiDependency) + ("optional" to "true")
             ) + dependencyProjects.map {
                 mapOf(
                     "groupId" to it.group,

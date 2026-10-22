@@ -1,6 +1,7 @@
 package mezz.jei.gui.overlay;
 
 import mezz.jei.api.gui.handlers.IGuiProperties;
+import mezz.jei.api.gui.placement.VerticalAlignment;
 import mezz.jei.common.config.IClientConfig;
 import mezz.jei.common.config.IClientToggleState;
 import mezz.jei.common.input.IInternalKeyMappings;
@@ -102,6 +103,10 @@ class IngredientListOverlayController {
 	}
 
 	boolean isListDisplayed() {
+		return isSearchDisplayed() && !contentsView.isEmpty();
+	}
+
+	boolean isSearchDisplayed() {
 		return (overlayEnabled.getAsBoolean() || toggleOverlayUnbound.getAsBoolean()) &&
 			hasValidScreen &&
 			contentsView.hasRoom();
@@ -140,7 +145,7 @@ class IngredientListOverlayController {
 			);
 		} catch (RuntimeException e) {
 			LOGGER.error("Failed to update JEI bounds for screen with properties : {}", guiProperties, e);
-			clearScreenAfterUpdateError();
+			clearScreen();
 		}
 	}
 
@@ -152,12 +157,8 @@ class IngredientListOverlayController {
 	void clearScreen() {
 		this.hasValidScreen = false;
 		this.contentsView.close();
-		this.searchField.setFocused(false);
-	}
-
-	void clearScreenAfterUpdateError() {
-		clearScreen();
 		this.lookupHistory.close();
+		this.searchField.setFocused(false);
 	}
 
 	private void updateBounds(IGuiProperties guiProperties, Set<ImmutableRect2i> guiExclusionAreas) {
@@ -175,8 +176,13 @@ class IngredientListOverlayController {
 
 		layout.lookupHistoryArea()
 			.ifPresent(lookupHistoryArea -> {
-				this.lookupHistory.updateBounds(alignLookupHistoryArea(lookupHistoryArea), guiExclusionAreas, null);
+				this.lookupHistory.updateBounds(lookupHistoryArea, guiExclusionAreas, null);
 				this.lookupHistory.updateLayout();
+				ImmutableRect2i resizeArea = new ImmutableRect2i(
+					layout.displayArea().x(), layout.displayArea().y(), layout.displayArea().width(),
+					lookupHistoryArea.y() + lookupHistoryArea.height() - layout.displayArea().y()
+				);
+				this.lookupHistory.setResizeBounds(resizeArea, VerticalAlignment.BOTTOM);
 			});
 
 		IngredientListOverlayLayout.SearchAndConfigAreas searchAndConfigAreas = layout.getSearchAndConfigAreas(
@@ -186,14 +192,6 @@ class IngredientListOverlayController {
 		this.searchField.setValue(filterTextSource.getFilterText());
 		this.searchField.updateBounds(searchAndConfigAreas.searchArea());
 		this.configButton.updateBounds(searchAndConfigAreas.configButtonArea());
-	}
-
-	private ImmutableRect2i alignLookupHistoryArea(ImmutableRect2i lookupHistoryArea) {
-		ImmutableRect2i ingredientGridArea = this.contentsView.getIngredientGridArea();
-		if (ingredientGridArea.isEmpty()) {
-			return lookupHistoryArea;
-		}
-		return lookupHistoryArea.matchWidthAndX(ingredientGridArea);
 	}
 
 	interface Config {

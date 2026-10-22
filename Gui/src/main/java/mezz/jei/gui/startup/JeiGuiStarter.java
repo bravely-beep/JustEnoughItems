@@ -10,6 +10,7 @@ import mezz.jei.api.recipe.IFocusFactory;
 import mezz.jei.api.recipe.IRecipeManager;
 import mezz.jei.api.recipe.transfer.IRecipeTransferManager;
 import mezz.jei.api.registration.IRuntimeRegistration;
+import mezz.jei.api.runtime.IBookmarkManager;
 import mezz.jei.api.runtime.IEditModeConfig;
 import mezz.jei.api.runtime.IIngredientFilter;
 import mezz.jei.api.runtime.IIngredientManager;
@@ -19,10 +20,10 @@ import mezz.jei.api.runtime.IScreenHelper;
 import mezz.jei.api.search.ISearchStorageBuilderFactory;
 import mezz.jei.common.Internal;
 import mezz.jei.common.config.IClientConfig;
+import mezz.jei.common.config.IClientConfigs;
 import mezz.jei.common.config.IClientToggleState;
 import mezz.jei.common.config.IIngredientFilterConfig;
 import mezz.jei.common.config.IIngredientGridConfig;
-import mezz.jei.common.config.IClientConfigs;
 import mezz.jei.common.gui.JeiGuiColors;
 import mezz.jei.common.gui.textures.Textures;
 import mezz.jei.common.input.IInternalKeyMappings;
@@ -33,6 +34,7 @@ import mezz.jei.common.util.LoggedTimer;
 import mezz.jei.gui.bookmarks.BookmarkCodec;
 import mezz.jei.gui.bookmarks.BookmarkFactory;
 import mezz.jei.gui.bookmarks.BookmarkList;
+import mezz.jei.gui.bookmarks.BookmarkManager;
 import mezz.jei.gui.bookmarks.IBookmark;
 import mezz.jei.gui.config.IBookmarkConfig;
 import mezz.jei.gui.config.ILookupHistoryConfig;
@@ -48,19 +50,6 @@ import mezz.jei.gui.ingredients.IngredientFilter;
 import mezz.jei.gui.ingredients.IngredientFilterApi;
 import mezz.jei.gui.ingredients.IngredientListElementFactory;
 import mezz.jei.gui.ingredients.IngredientSorter;
-import mezz.jei.gui.input.ClientInputHandler;
-import mezz.jei.gui.input.CombinedRecipeFocusSource;
-import mezz.jei.gui.input.GuiContainerWrapper;
-import mezz.jei.gui.input.ICharTypedHandler;
-import mezz.jei.gui.input.handlers.BookmarkInputHandler;
-import mezz.jei.gui.input.handlers.ChatLinkInputHandler;
-import mezz.jei.gui.input.handlers.CheatInputHandler;
-import mezz.jei.gui.input.handlers.DragRouter;
-import mezz.jei.gui.input.handlers.EditInputHandler;
-import mezz.jei.gui.input.handlers.FocusInputHandler;
-import mezz.jei.gui.input.handlers.GlobalInputHandler;
-import mezz.jei.gui.input.handlers.GuiAreaInputHandler;
-import mezz.jei.common.input.handlers.UserInputRouter;
 import mezz.jei.gui.overlay.IngredientListOverlay;
 import mezz.jei.gui.overlay.bookmarks.BookmarkOverlay;
 import mezz.jei.gui.overlay.bookmarks.history.LookupHistory;
@@ -198,13 +187,15 @@ public class JeiGuiStarter {
 			serverConnection,
 			ingredientFilterConfig,
 			textures,
-			colorHelper
+			colorHelper,
+			ingredientFilter
 		);
 		registration.setIngredientListOverlay(ingredientListOverlay);
 
 		BookmarkList bookmarkList = new BookmarkList(recipeManager, focusFactory, ingredientManager, registryAccess, bookmarkConfig, clientConfig, guiHelper, codecHelper, bookmarkFactory, bookmarkCodec);
 		bookmarkConfig.loadBookmarks(recipeManager, focusFactory, guiHelper, ingredientManager, registryAccess, bookmarkList, codecHelper, bookmarkCodec, bookmarkFactory, recipeTransferService);
-		registration.setBookmarkManager(bookmarkList);
+		IBookmarkManager bookmarkManager = new BookmarkManager(bookmarkList, bookmarkFactory, recipeManager, focusFactory, ingredientManager, recipeTransferService);
+		registration.setBookmarkManager(bookmarkManager);
 
 		BookmarkOverlay bookmarkOverlay = OverlayHelper.createBookmarkOverlay(
 			ingredientManager,
@@ -238,63 +229,27 @@ public class JeiGuiStarter {
 			focusUtil
 		);
 		registration.setRecipesGui(recipesGui);
-		var recipesGuiForegroundInputLayer = recipesGui.getForegroundInputLayer();
-		var bookmarkPreviewTooltipController = bookmarkOverlay.getPreviewTooltipController();
-
+		JeiInputSetup input = JeiInputSetup.create(
+			ingredientListOverlay,
+			bookmarkOverlay,
+			recipesGui,
+			bookmarkList,
+			bookmarkManager,
+			screenHelper,
+			ingredientManager,
+			focusFactory,
+			focusUtil,
+			clientConfig,
+			toggleState,
+			editModeConfig,
+			serverConnection,
+			keyMappings
+		);
 		GuiEventHandler guiEventHandler = new GuiEventHandler(
 			screenHelper,
 			bookmarkOverlay,
 			ingredientListOverlay,
-			recipesGuiForegroundInputLayer,
-			bookmarkPreviewTooltipController
-		);
-
-		CombinedRecipeFocusSource recipeFocusSource = new CombinedRecipeFocusSource(
-			bookmarkPreviewTooltipController,
-			recipesGui,
-			ingredientListOverlay,
-			bookmarkOverlay,
-			new GuiContainerWrapper(screenHelper)
-		);
-
-		List<ICharTypedHandler> charTypedHandlers = List.of(
-			ingredientListOverlay
-		);
-
-		UserInputRouter userInputRouter = new UserInputRouter(
-			"JEIGlobal",
-			recipesGuiForegroundInputLayer,
-			bookmarkPreviewTooltipController,
-			new EditInputHandler(recipeFocusSource, toggleState, editModeConfig),
-			ingredientListOverlay.createDeleteItemInputHandler(),
-			bookmarkOverlay.createDeleteItemInputHandler(),
-			new CheatInputHandler(recipeFocusSource, clientConfig, ingredientManager, toggleState, serverConnection),
-			ingredientListOverlay.createInputHandler(),
-			bookmarkOverlay.createInputHandler(),
-			new FocusInputHandler(recipeFocusSource, recipesGui, focusUtil, ingredientManager),
-			new BookmarkInputHandler(
-				recipeFocusSource,
-				bookmarkList,
-				bookmarkOverlay,
-				bookmarkPreviewTooltipController,
-				clientConfig,
-				recipesGui
-			),
-			new GlobalInputHandler(toggleState),
-			new GuiAreaInputHandler(screenHelper, recipesGui, focusFactory)
-		);
-
-		DragRouter dragRouter = new DragRouter(
-			ingredientListOverlay.createDragHandler(),
-			bookmarkOverlay.createDragHandler()
-		);
-		ClientInputHandler clientInputHandler = new ClientInputHandler(
-			charTypedHandlers,
-			new ChatLinkInputHandler(recipesGui, focusUtil, screenHelper, bookmarkList),
-			userInputRouter,
-			dragRouter,
-			keyMappings,
-			screenHelper
+			input.scene().getForegroundLayers()
 		);
 		ResourceReloadHandler resourceReloadHandler = new ResourceReloadHandler(
 			ingredientListOverlay,
@@ -303,7 +258,7 @@ public class JeiGuiStarter {
 
 		return new JeiEventHandlers(
 			guiEventHandler,
-			clientInputHandler,
+			input.handler(),
 			resourceReloadHandler
 		);
 	}

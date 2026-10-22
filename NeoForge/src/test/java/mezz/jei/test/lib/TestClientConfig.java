@@ -7,13 +7,18 @@ import mezz.jei.common.config.HistoryDisplaySide;
 import mezz.jei.common.config.IClientConfig;
 import mezz.jei.common.config.IngredientSortStage;
 import mezz.jei.common.config.SearchBarPosition;
+import mezz.jei.common.config.RecipeGuiNavigationMode;
 
 import java.util.List;
 
 public class TestClientConfig implements IClientConfig {
 	private final IConfigValue<SearchBarPosition> searchBarPosition = value("searchBarPosition", SearchBarPosition.STANDARD);
 	private final IConfigValue<Integer> maxRecipeGuiHeight = value("maxRecipeGuiHeight", 500);
+	private final IConfigValue<Integer> recipeGuiWidth = value("recipeGuiWidth", minRecipeGuiWidth);
+	private final IConfigValue<RecipeGuiNavigationMode> recipeGuiNavigationMode = value("navigationMode", RecipeGuiNavigationMode.PAGED);
+	private final IConfigValue<Integer> maxRecipeGuiColumns = value("maxRecipeGuiColumns", 2);
 	private final IConfigValue<Boolean> toastReflowEnabled = value("toastReflowEnabled", true);
+	private final IConfigValue<Boolean> compactInventoryEffects = value("compactInventoryEffects", true);
 	private final IConfigValue<GiveMode> giveMode = value("giveMode", GiveMode.INVENTORY);
 	private final IConfigValue<Boolean> cheatToHotbarUsingHotkeysEnabled = value("cheatToHotbarUsingHotkeysEnabled", false);
 	private final IConfigValue<Boolean> showHiddenIngredients = value("showHiddenIngredients", false);
@@ -25,6 +30,7 @@ public class TestClientConfig implements IClientConfig {
 	private final IConfigValue<Boolean> dragToRearrangeBookmarksEnabled = value("dragToRearrangeBookmarksEnabled", false);
 	private final IConfigValue<Boolean> lookupHistoryEnabled = value("lookupHistoryEnabled", false);
 	private final IConfigValue<Integer> maxLookupHistoryRows = value("maxLookupHistoryRows", 0);
+	private final IConfigValue<Integer> maxLookupHistoryColumns = value("maxLookupHistoryColumns", 0);
 	private final IConfigValue<Integer> maxLookupHistoryIngredients = value("maxLookupHistoryIngredients", 0);
 	private final IConfigValue<HistoryDisplaySide> lookupHistoryDisplaySide = value("lookupHistoryDisplaySide", HistoryDisplaySide.LEFT);
 	private final IConfigValue<Boolean> ingredientsSummaryEnabled = value("ingredientsSummaryEnabled", true);
@@ -35,8 +41,12 @@ public class TestClientConfig implements IClientConfig {
 	private final IConfigValue<Boolean> lookupFluidContentsEnabled = value("lookupFluidContentsEnabled", false);
 	private final IConfigValue<Boolean> lookupBlockTagsEnabled = value("lookupBlockTagsEnabled", false);
 	private final IConfigValue<Boolean> showCreativeTabNamesEnabled = value("showCreativeTabNamesEnabled", false);
+	private final IConfigValue<Boolean> guiResizeEnabled = value("guiResizeEnabled", true);
 	private final IConfigValue<Integer> dragDelayMs = value("dragDelayMs", 0);
+	private final IConfigValue<Boolean> smoothScrollingEnabled = value("smoothScrollingEnabled", true);
 	private final IConfigValue<Integer> smoothScrollRate = value("smoothScrollRate", 9);
+	private final IConfigValue<Boolean> searchCompletionEnabled = value("searchCompletionEnabled", false);
+	private final IConfigValue<Integer> maxSearchCompletionRows = value("maxSearchCompletionRows", 5);
 	private final IConfigValue<Boolean> recipeSlotCyclingEnabled = value("recipeSlotCyclingEnabled", false);
 	private final IConfigValue<List<IngredientSortStage>> ingredientSorterStages = value("ingredientSorterStages", List.<IngredientSortStage>of());
 	private final IConfigValue<Boolean> recipeSortingBookmarksEnabled = value("recipeSortingBookmarksEnabled", false);
@@ -63,8 +73,28 @@ public class TestClientConfig implements IClientConfig {
 	}
 
 	@Override
+	public IConfigValue<Integer> recipeGuiWidth() {
+		return recipeGuiWidth;
+	}
+
+	@Override
+	public IConfigValue<RecipeGuiNavigationMode> recipeGuiNavigationMode() {
+		return recipeGuiNavigationMode;
+	}
+
+	@Override
+	public IConfigValue<Integer> maxRecipeGuiColumns() {
+		return maxRecipeGuiColumns;
+	}
+
+	@Override
 	public IConfigValue<Boolean> toastReflowEnabled() {
 		return toastReflowEnabled;
+	}
+
+	@Override
+	public IConfigValue<Boolean> compactInventoryEffects() {
+		return compactInventoryEffects;
 	}
 
 	@Override
@@ -123,6 +153,11 @@ public class TestClientConfig implements IClientConfig {
 	}
 
 	@Override
+	public IConfigValue<Integer> maxLookupHistoryColumns() {
+		return maxLookupHistoryColumns;
+	}
+
+	@Override
 	public IConfigValue<Integer> maxLookupHistoryIngredients() {
 		return maxLookupHistoryIngredients;
 	}
@@ -173,13 +208,33 @@ public class TestClientConfig implements IClientConfig {
 	}
 
 	@Override
+	public IConfigValue<Boolean> guiResizeEnabled() {
+		return guiResizeEnabled;
+	}
+
+	@Override
 	public IConfigValue<Integer> dragDelayMs() {
 		return dragDelayMs;
 	}
 
 	@Override
+	public IConfigValue<Boolean> smoothScrollingEnabled() {
+		return smoothScrollingEnabled;
+	}
+
+	@Override
 	public IConfigValue<Integer> smoothScrollRate() {
 		return smoothScrollRate;
+	}
+
+	@Override
+	public IConfigValue<Boolean> searchCompletionEnabled() {
+		return searchCompletionEnabled;
+	}
+
+	@Override
+	public IConfigValue<Integer> maxSearchCompletionRows() {
+		return maxSearchCompletionRows;
 	}
 
 	@Override

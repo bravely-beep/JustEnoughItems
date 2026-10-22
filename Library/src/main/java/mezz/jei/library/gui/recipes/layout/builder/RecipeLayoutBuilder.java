@@ -1,7 +1,10 @@
 package mezz.jei.library.gui.recipes.layout.builder;
 
-import it.unimi.dsi.fastutil.ints.IntArraySet;
-import it.unimi.dsi.fastutil.ints.IntSet;
+import mezz.jei.library.ingredients.RecipeIngredientSupplier.FocusLink;
+import mezz.jei.common.Internal;
+import mezz.jei.api.ingredients.subtypes.UidContext;
+import mezz.jei.api.runtime.IIngredientVisibility;
+import java.util.Optional;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.gui.builder.IIngredientAcceptor;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
@@ -15,7 +18,6 @@ import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.recipe.category.extensions.IRecipeCategoryDecorator;
 import mezz.jei.api.runtime.IIngredientManager;
-import mezz.jei.common.Internal;
 import mezz.jei.common.collect.ListMultiMap;
 import mezz.jei.common.util.ImmutablePoint2i;
 import mezz.jei.common.util.Pair;
@@ -29,7 +31,6 @@ import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -88,10 +89,11 @@ public class RecipeLayoutBuilder<T> implements IRecipeLayoutBuilder {
 	}
 
 	private void addOutputSlotTooltipCallback(RecipeSlotBuilder slot) {
-		ResourceLocation recipeName = recipeCategory.getRegistryName(recipe);
-		if (recipeName != null) {
+		ResourceLocation recipeId = recipeCategory.getRegistryName(recipe);
+		List<ResourceLocation> sourceRecipeIds = recipeCategory.getSourceRecipeIds(recipe);
+		if (recipeId != null || !sourceRecipeIds.isEmpty()) {
 			RecipeType<T> recipeType = recipeCategory.getRecipeType();
-			OutputSlotTooltipCallback callback = new OutputSlotTooltipCallback(recipeName, recipeType);
+			OutputSlotTooltipCallback callback = new OutputSlotTooltipCallback(recipeId, sourceRecipeIds, recipeType);
 			slot.addRichTooltipCallback(callback);
 		}
 	}
@@ -121,6 +123,11 @@ public class RecipeLayoutBuilder<T> implements IRecipeLayoutBuilder {
 
 	@Override
 	public void createFocusLink(IIngredientAcceptor<?>... slots) {
+		createFocusLink(List.of(slots));
+	}
+
+	@Override
+	public void createFocusLink(Collection<? extends IIngredientAcceptor<?>> slots) {
 		List<RecipeSlotBuilder> builders = new ArrayList<>();
 		// The focus-linked slots should have the same number of ingredients.
 		// Users can technically add more ingredients to the slots later,
@@ -135,7 +142,7 @@ public class RecipeLayoutBuilder<T> implements IRecipeLayoutBuilder {
 			if (count == -1) {
 				count = ingredientCount;
 			} else if (count != ingredientCount) {
-				IntSummaryStatistics stats = Arrays.stream(slots)
+				IntSummaryStatistics stats = slots.stream()
 					.map(RecipeSlotBuilder.class::cast)
 					.map(RecipeSlotBuilder::getIngredientAcceptor)
 					.map(DisplayIngredientAcceptor::getAllIngredients)
@@ -152,7 +159,7 @@ public class RecipeLayoutBuilder<T> implements IRecipeLayoutBuilder {
 	}
 
 	@SuppressWarnings("removal")
-	public RecipeLayout<T> buildRecipeLayout(
+	public Optional<RecipeLayout<T>> buildRecipeLayout(
 		IFocusGroup focuses,
 		Collection<IRecipeCategoryDecorator<T>> decorators,
 		IScalableDrawable recipeBackground,
@@ -167,18 +174,24 @@ public class RecipeLayoutBuilder<T> implements IRecipeLayoutBuilder {
 
 		CycleTicker cycleTicker = CycleTicker.createWithRandomOffset();
 
+		IIngredientVisibility ingredientVisibility = Internal.getJeiRuntime().getJeiHelpers().getIngredientVisibility();
 		Set<RecipeSlotBuilder> focusLinkedSlots = new HashSet<>();
 		for (List<RecipeSlotBuilder> linkedSlots : this.focusLinkedSlots) {
-			IntSet focusMatches = new IntArraySet();
-			for (RecipeSlotBuilder slot : linkedSlots) {
-				focusMatches.addAll(slot.getMatches(focuses));
+			FocusLink focusLink = new FocusLink(linkedSlots.stream()
+				.map(slot -> new FocusLink.Slot(slot.getRole(), slot.getIngredientAcceptor().getAllIngredients()))
+				.toList());
+			Set<Integer> linkedIndexes = focusLink.getVisibleIngredientIndexes(
+				focuses, ingredientManager, ingredient -> ingredientVisibility.isIngredientVisible(ingredient, UidContext.Recipe)
+			);
+			if (linkedIndexes == null) {
+				return Optional.empty();
 			}
 			for (RecipeSlotBuilder slotBuilder : linkedSlots) {
 				if (!visibleSlots.contains(slotBuilder)) {
 					continue;
 				}
 				mezz.jei.api.gui.widgets.ISlottedWidgetFactory<?> assignedWidget = slotBuilder.getAssignedWidget();
-				Pair<Integer, IRecipeSlotDrawable> slotDrawable = slotBuilder.build(focusMatches, cycleTicker);
+				Pair<Integer, IRecipeSlotDrawable> slotDrawable = slotBuilder.build(linkedIndexes, cycleTicker);
 				if (assignedWidget == null) {
 					recipeCategorySlots.add(slotDrawable);
 				} else {
@@ -237,7 +250,7 @@ public class RecipeLayoutBuilder<T> implements IRecipeLayoutBuilder {
 			factory.createWidgetForSlots(recipeLayout, recipe, slots);
 		}
 
-		return recipeLayout;
+		return Optional.of(recipeLayout);
 	}
 
 	private static List<IRecipeSlotDrawable> sortSlots(List<Pair<Integer, IRecipeSlotDrawable>> indexedSlots) {

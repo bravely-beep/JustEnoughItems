@@ -1,3 +1,5 @@
+import mezz.jei.gradle.gradleProperty
+import org.gradle.api.publish.maven.internal.publication.MavenPublicationInternal
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 import org.slf4j.event.Level
@@ -11,31 +13,37 @@ plugins {
 }
 
 // gradle.properties
-val jUnitVersion: String by extra
-val minecraftVersion: String by extra
-val neoformTimestamp: String by extra
-val modId: String by extra
-val modJavaVersion: String by extra
-val bakedSubstringIndexVersion: String by extra
-val suffixtreeVersion: String by extra
+val jUnitVersion = gradleProperty("jUnitVersion")
+val minecraftVersion = gradleProperty("minecraftVersion")
+val neoformTimestamp = gradleProperty("neoformTimestamp")
+val modId = gradleProperty("modId")
+val modJavaVersion = gradleProperty("modJavaVersion")
+val mixinVersion = gradleProperty("mixinVersion")
+val bakedSubstringIndexVersion = gradleProperty("bakedSubstringIndexVersion")
+val suffixtreeVersion = gradleProperty("suffixtreeVersion")
 val neoformVersionAndTimestamp = "$minecraftVersion-$neoformTimestamp"
-val deduplicatingRunnerVersion: String by extra
+val deduplicatingRunnerVersion = gradleProperty("deduplicatingRunnerVersion")
 val mezzConfigApiDependency: String by rootProject.extra
-val mezzConfigDependency: String by rootProject.extra
+val mezzConfigNeoForgeDependency: String by rootProject.extra
 
 val baseArchivesName = "${modId}-${minecraftVersion}-common"
+val apiArchivesName = "${modId}-${minecraftVersion}-common-api"
 base {
     archivesName.set(baseArchivesName)
 }
 
+val apiSourceSet = sourceSets.create("api") {
+    resources.setSrcDirs(emptyList<String>())
+    compileClasspath += configurations.compileClasspath.get()
+}
+
 val generatedJeiGuiColorsResources = layout.buildDirectory.dir("generated/resources/jeiGuiColors")
 
-val dependencyProjects: List<Project> = listOf(
-    project(":CommonApi"),
-)
-
-dependencyProjects.forEach {
-    project.evaluationDependsOn(it.path)
+sourceSets.configureEach {
+    if (name != "api") {
+        compileClasspath += apiSourceSet.output
+        runtimeClasspath += apiSourceSet.output
+    }
 }
 
 neoForge {
@@ -81,27 +89,12 @@ dependencies {
     compileOnly(
         group = "org.spongepowered",
         name = "mixin",
-        version = "0.8.5"
-    )
-    implementation(
-        group = "com.google.guava",
-        name = "guava",
-        version = "31.1-jre"
+        version = mixinVersion
     )
     implementation(
         group = "org.jetbrains",
         name = "annotations",
-        version = "23.0.0"
-    )
-    implementation(
-        group = "it.unimi.dsi",
-        name = "fastutil",
-        version = "8.5.6"
-    )
-    implementation(
-        group = "org.apache.logging.log4j",
-        name = "log4j-api",
-        version = "2.17.0"
+        version = "26.1.0"
     )
     implementation("net.mezzdev:deduplicating-runner:$deduplicatingRunnerVersion") {
         isTransitive = false
@@ -121,9 +114,6 @@ dependencies {
     ) {
         isTransitive = false
     }
-    dependencyProjects.forEach {
-        implementation(it)
-    }
 	testFixturesCompileOnly("org.jspecify:jspecify:1.0.0")
 	"datagenCompileOnly"("org.jspecify:jspecify:1.0.0")
 	testImplementation(
@@ -131,7 +121,7 @@ dependencies {
         name = "junit-jupiter",
         version = jUnitVersion
     )
-    testImplementation(mezzConfigDependency)
+    testImplementation(mezzConfigNeoForgeDependency)
     testRuntimeOnly(
         group = "org.junit.platform",
         name = "junit-platform-launcher"
@@ -167,21 +157,49 @@ tasks.withType<JavaCompile> {
     }
 }
 
+val apiJarTask = tasks.register<Jar>("apiJar") {
+    archiveBaseName.set(apiArchivesName)
+    from(apiSourceSet.output)
+    manifest.attributes["Implementation-Title"] = "jar"
+}
+
+val apiSourcesJarTask = tasks.register<Jar>("apiSourcesJar") {
+    archiveBaseName.set(apiArchivesName)
+    archiveClassifier.set("sources")
+    from(apiSourceSet.allSource)
+    manifest.attributes["Implementation-Title"] = "sourcesJar"
+}
+
+apiJarTask.configure {
+    manifest.attributes["Fabric-Loom-Remap"] = true
+}
+apiSourcesJarTask.configure {
+    manifest.attributes["Fabric-Loom-Remap"] = true
+}
+
+tasks.assemble {
+    dependsOn(apiJarTask, apiSourcesJarTask)
+}
+
 publishing {
     publications {
+        register<MavenPublication>("commonApiJar") {
+            // Project dependencies continue to use the main publication's coordinates.
+            (this as MavenPublicationInternal).isAlias = true
+            artifactId = apiArchivesName
+            artifact(apiJarTask)
+            artifact(apiSourcesJarTask)
+        }
+
         register<MavenPublication>("commonJar") {
             artifactId = base.archivesName.get()
             artifact(tasks.jar)
             artifact(tasks.named("sourcesJar"))
 
             val mezzConfigApiDependencyInfo = dependencyInfo(mezzConfigApiDependency)
-            val dependencyInfos = listOf(mezzConfigApiDependencyInfo) + dependencyProjects.map {
-                mapOf(
-                    "groupId" to it.group,
-                    "artifactId" to it.base.archivesName.get(),
-                    "version" to it.version
-                )
-            } + listOf(
+            val dependencyInfos = listOf(mezzConfigApiDependencyInfo) + listOf(
+                mapOf("groupId" to project.group, "artifactId" to apiArchivesName, "version" to project.version)
+            ) + listOf(
                 mapOf(
                     "groupId" to "net.mezzdev",
                     "artifactId" to "deduplicating-runner",

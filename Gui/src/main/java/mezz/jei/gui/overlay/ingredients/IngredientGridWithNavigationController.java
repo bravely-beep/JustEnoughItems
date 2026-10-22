@@ -6,15 +6,18 @@ import mezz.jei.api.runtime.IRecipesGui;
 import mezz.jei.common.config.IClientConfig;
 import mezz.jei.common.config.IClientToggleState;
 import mezz.jei.common.config.IIngredientGridConfig;
+import mezz.jei.common.input.IInputTarget;
 import mezz.jei.common.input.IInternalKeyMappings;
+import mezz.jei.common.input.IMouseOverable;
+import mezz.jei.common.input.UserInput;
+import mezz.jei.common.input.interaction.IInputInteraction;
+import mezz.jei.common.input.interaction.InputAction;
+import mezz.jei.gui.elements.IScrollbarController;
 import mezz.jei.gui.ghost.GhostIngredientQuickMoveManager;
 import mezz.jei.gui.input.DelegatingClickableIngredientInternal;
 import mezz.jei.gui.input.IClickableIngredientInternal;
-import mezz.jei.common.input.IMouseOverable;
 import mezz.jei.gui.input.IPaged;
-import mezz.jei.common.input.IUserInputHandler;
-import mezz.jei.common.input.UserInput;
-import mezz.jei.common.input.handlers.SameElementInputHandler;
+import mezz.jei.gui.input.InputCommands;
 import mezz.jei.gui.overlay.elements.IElement;
 import mezz.jei.gui.recipes.RecipesGui;
 import mezz.jei.gui.util.CommandUtil;
@@ -28,9 +31,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Stream;
+import java.util.function.BooleanSupplier;
 
-public class IngredientGridWithNavigationController implements IPaged, IUserInputHandler {
+public class IngredientGridWithNavigationController implements IPaged, IInputTarget, IScrollbarController {
 	private final IngredientGridPageState pageState = new IngredientGridPageState();
 	private final IngredientGridScrollController scrollController;
 	private final IIngredientGridSource ingredientSource;
@@ -91,6 +94,28 @@ public class IngredientGridWithNavigationController implements IPaged, IUserInpu
 		this.onLayoutChanged.run();
 	}
 
+	public void setPageAnchorElement(IElement<?> pageAnchorElement) {
+		if (usesScrollbar()) {
+			this.scrollController.setScrollAnchorElement(pageAnchorElement);
+		} else {
+			this.pageState.setPageAnchorElement(pageAnchorElement);
+		}
+	}
+
+	/** Includes temporarily hidden elements, such as the bookmark currently being dragged. */
+	public List<IElement<?>> getPageElements() {
+		List<IElement<?>> elements = this.ingredientSource.getElements();
+		int firstIndex;
+		if (usesScrollbar()) {
+			firstIndex = this.scrollController.getFirstVisibleScrollRow() * this.ingredientGrid.getColumnCount();
+		} else {
+			firstIndex = this.pageState.getFirstItemIndex();
+		}
+		firstIndex = Math.min(firstIndex, elements.size());
+		int endIndex = Math.min(firstIndex + this.ingredientGrid.size(), elements.size());
+		return elements.subList(firstIndex, endIndex);
+	}
+
 	@Nullable
 	public IElement<?> getPageAnchorElement() {
 		if (usesScrollbar()) {
@@ -122,9 +147,18 @@ public class IngredientGridWithNavigationController implements IPaged, IUserInpu
 	}
 
 	private void rememberFirstVisibleElementAsPageAnchor() {
-		this.ingredientGrid.getVisibleElements()
-			.findFirst()
-			.ifPresent(this.pageState::setPageAnchorElement);
+		Optional<IElement<?>> firstVisibleElement = this.ingredientGrid.getVisibleElements()
+			.findFirst();
+		if (firstVisibleElement.isPresent()) {
+			this.pageState.setPageAnchorElement(firstVisibleElement.get());
+			return;
+		}
+		// the page can render empty while a drag hides its only bookmark
+		List<IElement<?>> ingredientList = ingredientSource.getElements();
+		int firstItemIndex = this.pageState.getFirstItemIndex();
+		if (firstItemIndex < ingredientList.size()) {
+			this.pageState.setPageAnchorElement(ingredientList.get(firstItemIndex));
+		}
 	}
 
 	@Override
@@ -216,49 +250,41 @@ public class IngredientGridWithNavigationController implements IPaged, IUserInpu
 	}
 
 	@Override
-	public Optional<IUserInputHandler> handleMouseScrolled(double mouseX, double mouseY, double scrollDeltaX, double scrollDeltaY) {
+	public boolean scroll(double mouseX, double mouseY, double scrollDeltaX, double scrollDeltaY) {
 		if (!mouseOverable.isMouseOver(mouseX, mouseY)) {
-			return Optional.empty();
+			return false;
 		}
 		if (usesScrollbar()) {
 			IngredientGridScrollController.ScrollResult scrollResult = this.scrollController.scrollByMouse(scrollDeltaY);
 			updateLayoutWhenChanged(scrollResult.changed());
 			if (scrollResult.consumed()) {
-				return Optional.of(this);
+				return true;
 			}
-			return Optional.empty();
+			return false;
 		}
 		if (scrollDeltaY < 0) {
 			if (nextPage()) {
-				return Optional.of(this);
+				return true;
 			}
 		} else if (scrollDeltaY > 0) {
 			if (previousPage()) {
-				return Optional.of(this);
+				return true;
 			}
 		}
-		return Optional.empty();
+		return false;
 	}
 
 	@Override
-	public Optional<IUserInputHandler> handleUserInput(Screen screen, UserInput input, IInternalKeyMappings keyBindings) {
-		if (input.is(keyBindings.getNextPage())) {
-			nextPage();
-			return Optional.of(this);
-		}
+	public Optional<IInputInteraction> beginInput(Screen screen, UserInput input, IInternalKeyMappings keys) {
+		return Optional.empty();
+	}
 
-		if (input.is(keyBindings.getPreviousPage())) {
-			previousPage();
-			return Optional.of(this);
-		}
-
-		if (input.is(keyBindings.getQuickMove())) {
-			if (this.ghostIngredientQuickMoveManager.quickMove(screen, input)) {
-				return Optional.of(this);
-			}
-		}
-
-		return checkHotbarKeys(screen, input);
+	public void registerInputCommands(InputCommands commands, IInternalKeyMappings keys, BooleanSupplier active) {
+		commands.add("Next Page", keys.getNextPage(), active, this::nextPage);
+		commands.add("Previous Page", keys.getPreviousPage(), active, this::previousPage);
+		commands.add(InputCommands.Scope.HOVERED, "Quick move", input -> active.getAsBoolean() && input.is(keys.getQuickMove()),
+			(screen, input) -> ghostIngredientQuickMoveManager.prepareQuickMove(screen, input).map(action -> action.when(active)));
+		commands.add(InputCommands.Scope.HOVERED, "Hotbar assignment", input -> active.getAsBoolean(), this::checkHotbarKeys);
 	}
 
 	private boolean usesScrollbar() {
@@ -270,20 +296,28 @@ public class IngredientGridWithNavigationController implements IPaged, IUserInpu
 		return this.scrollController.canScroll();
 	}
 
+	@Override
 	public int getVisibleScrollAmount() {
 		return this.scrollController.getVisibleScrollAmount();
 	}
 
+	@Override
 	public int getHiddenScrollAmount() {
 		return this.scrollController.getHiddenScrollAmount();
 	}
 
+	@Override
 	public float getScrollOffsetY() {
 		return this.scrollController.getScrollOffsetY();
 	}
 
+	@Override
 	public void setScrollOffsetY(float scrollOffsetY) {
 		updateLayoutWhenChanged(this.scrollController.setScrollOffsetY(scrollOffsetY));
+	}
+
+	public boolean scrollByPixels(double pixels) {
+		return usesScrollbar() && updateLayoutWhenChanged(this.scrollController.scrollByPixels(pixels));
 	}
 
 	private boolean updateLayoutWhenChanged(boolean layoutChanged) {
@@ -297,7 +331,7 @@ public class IngredientGridWithNavigationController implements IPaged, IUserInpu
 	 * Modeled after ContainerScreen#checkHotbarKeys(int)
 	 * Sets the stack in a hotbar slot to the one that's hovered over.
 	 */
-	private Optional<IUserInputHandler> checkHotbarKeys(Screen screen, UserInput input) {
+	private Optional<IInputInteraction> checkHotbarKeys(Screen screen, UserInput input) {
 		if (!clientConfig.cheatToHotbarUsingHotkeysEnabled().get() ||
 			!this.toggleState.isCheatItemsEnabled() ||
 			screen instanceof RecipesGui
@@ -318,16 +352,16 @@ public class IngredientGridWithNavigationController implements IPaged, IUserInpu
 			return Optional.empty();
 		}
 
-		return this.ingredientGrid.getIngredientUnderMouse(mouseX, mouseY)
-			.<IUserInputHandler>flatMap(clickedIngredient -> {
-				ItemStack cheatItemStack = clickedIngredient.getCheatItemStack(ingredientManager);
-				if (!cheatItemStack.isEmpty()) {
-					commandUtil.setHotbarStack(cheatItemStack, hotbarSlot);
-					return Stream.of(new SameElementInputHandler(this, clickedIngredient::isMouseOver));
-				}
-				return Stream.empty();
-			})
-			.findFirst();
+		for (IClickableIngredientInternal<?> clicked : this.ingredientGrid.getIngredientUnderMouse(mouseX, mouseY).toList()) {
+			ItemStack cheatItemStack = clicked.getCheatItemStack(ingredientManager);
+			if (!cheatItemStack.isEmpty()) {
+				return Optional.of(InputAction.run(() -> commandUtil.setHotbarStack(cheatItemStack, hotbarSlot))
+					.within(clicked::isMouseOver)
+					.when(clicked.getElement()::isVisible)
+					.when(toggleState::isCheatItemsEnabled));
+			}
+		}
+		return Optional.empty();
 	}
 
 	private static int getHotbarSlotForInput(UserInput input, Options gameSettings) {

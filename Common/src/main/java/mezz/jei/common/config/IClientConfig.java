@@ -5,6 +5,7 @@ import net.mezzdev.config.api.value.IConfigValue;
 import java.util.List;
 
 public interface IClientConfig {
+	int minRecipeGuiWidth = 198;
 	int minRecipeGuiHeight = 175;
 	int defaultRecipeGuiHeight = 350;
 	int maximumRecipeGuiHeight = 7680;
@@ -14,7 +15,15 @@ public interface IClientConfig {
 
 	IConfigValue<Integer> maxRecipeGuiHeight();
 
+	IConfigValue<Integer> recipeGuiWidth();
+
+	IConfigValue<Integer> maxRecipeGuiColumns();
+
+	IConfigValue<RecipeGuiNavigationMode> recipeGuiNavigationMode();
+
 	IConfigValue<Boolean> toastReflowEnabled();
+
+	IConfigValue<Boolean> compactInventoryEffects();
 
 	IConfigValue<GiveMode> giveMode();
 
@@ -38,6 +47,8 @@ public interface IClientConfig {
 
 	IConfigValue<Integer> maxLookupHistoryRows();
 
+	IConfigValue<Integer> maxLookupHistoryColumns();
+
 	IConfigValue<Integer> maxLookupHistoryIngredients();
 
 	IConfigValue<HistoryDisplaySide> lookupHistoryDisplaySide();
@@ -58,9 +69,17 @@ public interface IClientConfig {
 
 	IConfigValue<Boolean> showCreativeTabNamesEnabled();
 
+	IConfigValue<Boolean> guiResizeEnabled();
+
 	IConfigValue<Integer> dragDelayMs();
 
+	IConfigValue<Boolean> smoothScrollingEnabled();
+
 	IConfigValue<Integer> smoothScrollRate();
+
+	IConfigValue<Boolean> searchCompletionEnabled();
+
+	IConfigValue<Integer> maxSearchCompletionRows();
 
 	IConfigValue<Boolean> recipeSlotCyclingEnabled();
 

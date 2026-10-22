@@ -10,6 +10,7 @@ import mezz.jei.common.config.HistoryDisplaySide;
 import mezz.jei.common.config.IClientConfig;
 import mezz.jei.common.config.IIngredientFilterConfig;
 import mezz.jei.common.config.IIngredientGridConfig;
+import mezz.jei.common.config.IngredientGridBackgroundStyle;
 import mezz.jei.common.config.IngredientGridLayoutMode;
 import mezz.jei.common.config.IngredientGridNavigationMode;
 import mezz.jei.common.config.IngredientSortStage;
@@ -23,6 +24,9 @@ import net.mezzdev.config.file.ConfigFileUtil;
 import net.mezzdev.config.file.ConfigManager;
 import net.mezzdev.config.schema.ConfigSchemaBuilder;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -30,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,8 +42,72 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientConfigMigrationTest {
-	@Test
-	public void loadsEveryReleasedClientConfigValue(@TempDir Path tempDir) throws IOException {
+	@ParameterizedTest
+	@CsvSource({"'', true", "true, true", "false, false"})
+	public void loadsInventoryEffectCompactingSetting(String savedValue, boolean expected, @TempDir Path tempDir) throws IOException {
+		Path configFile = tempDir.resolve("jei-client.ini");
+		if (!savedValue.isEmpty()) {
+			Files.writeString(configFile, "[ingredientList]\ncompactInventoryEffects = " + savedValue + "\n");
+		}
+		ConfigFileWatcherSettings disabledWatcher = ConfigFileWatcherSettings.clientDefaults().withEnabled(false);
+		ConfigManager configManager = new ConfigManager("JEI Inventory Effects Test", disabledWatcher, disabledWatcher);
+		ClientConfigs configs = new ClientConfigs(
+			new ConfigSchemaBuilder("jei", configFile, "jei.config.client", configManager),
+			false,
+			configManager.createInMemorySortingConfig(Comparator.naturalOrder(), true)
+		);
+
+		assertEquals(expected, configs.getClientConfig().compactInventoryEffects().get());
+	}
+
+	@ParameterizedTest
+	@CsvSource({"'', 2", "1, 1", "2, 2", "10, 10", "0, 2", "11, 2"})
+	public void loadsRecipeColumnLimitWithDefaultAndRangeValidation(String savedColumns, int expectedColumns, @TempDir Path tempDir) throws IOException {
+		Path configFile = tempDir.resolve("jei-client.ini");
+		String content = "";
+		if (!savedColumns.isEmpty()) {
+			content = "[recipes]\nmaxRecipeGuiColumns = " + savedColumns + "\n";
+		}
+		Files.writeString(configFile, content);
+		ConfigFileWatcherSettings disabledWatcher = ConfigFileWatcherSettings.clientDefaults().withEnabled(false);
+		ConfigManager configManager = new ConfigManager("JEI Recipe Columns Test", disabledWatcher, disabledWatcher);
+		ClientConfigs configs = new ClientConfigs(
+			new ConfigSchemaBuilder("jei", configFile, "jei.config.client", configManager),
+			false,
+			configManager.createInMemorySortingConfig(Comparator.naturalOrder(), true)
+		);
+
+		assertEquals(expectedColumns, configs.getClientConfig().maxRecipeGuiColumns().get());
+	}
+
+	@ParameterizedTest
+	@CsvSource({"0, 9", "5, 5"})
+	public void loadsIndependentHistoryWidthFromExistingConfig(int savedColumns, int expectedColumns, @TempDir Path tempDir) throws IOException {
+		Path configFile = tempDir.resolve("jei-client.ini");
+		Files.writeString(configFile, """
+			[lookups]
+			maxColumns = %d
+			maxRows = 3
+
+			[ingredientList]
+			maxColumns = 4
+			""".formatted(savedColumns));
+		ConfigFileWatcherSettings disabledWatcher = ConfigFileWatcherSettings.clientDefaults().withEnabled(false);
+		ConfigManager configManager = new ConfigManager("JEI History Width Test", disabledWatcher, disabledWatcher);
+		ClientConfigs configs = new ClientConfigs(
+			new ConfigSchemaBuilder("jei", configFile, "jei.config.client", configManager),
+			false,
+			configManager.createInMemorySortingConfig(Comparator.naturalOrder(), true)
+		);
+
+		assertEquals(expectedColumns, configs.getClientConfig().maxLookupHistoryColumns().get());
+		assertEquals(3, configs.getClientConfig().maxLookupHistoryRows().get());
+		assertEquals(4, configs.getIngredientListConfig().maxColumns().get());
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"resourceLocationSearchMode", "identifierSearchMode"})
+	public void loadsEveryReleasedClientConfigValue(String identifierSearchKey, @TempDir Path tempDir) throws IOException {
 		Path configDirectory = tempDir.resolve("jei");
 		UUID profileId = UUID.randomUUID();
 		Path rootLegacyFile = configDirectory.resolve("jei-client.ini");
@@ -102,7 +171,7 @@ public class ClientConfigMigrationTest {
 			tagSearchMode = DISABLED
 			tooltipSearchMode = REQUIRE_PREFIX
 			colorSearchMode = ENABLED
-			resourceLocationSearchMode = REQUIRE_PREFIX
+			%s = REQUIRE_PREFIX
 			creativeTabSearchMode = ENABLED
 			searchAdvancedTooltips = true
 			searchModIds = false
@@ -129,7 +198,7 @@ public class ClientConfigMigrationTest {
 			drawBackground = true
 			layoutMode = MAXIMIZE_AVAILABLE_SPACE
 			navigationMode = SMOOTH_SCROLLING
-			""");
+			""".formatted(identifierSearchKey));
 
 		ConfigFileWatcherSettings disabledWatcher = ConfigFileWatcherSettings.clientDefaults().withEnabled(false);
 		ConfigManager configManager = new ConfigManager("JEI Config Migration Test", disabledWatcher, disabledWatcher);
@@ -170,6 +239,7 @@ public class ClientConfigMigrationTest {
 		assertFalse(client.catchRenderErrorsEnabled().get());
 		assertFalse(client.recipeSyncWarningEnabled().get());
 		assertEquals(234, client.dragDelayMs().get());
+		assertTrue(client.smoothScrollingEnabled().get());
 		assertEquals(17, client.smoothScrollRate().get());
 		assertFalse(client.recipeSlotCyclingEnabled().get());
 		assertEquals(List.of(IngredientSortStage.ALPHABETICAL, IngredientSortStage.MOD_NAME), client.ingredientSorterStages().get());
@@ -205,9 +275,9 @@ public class ClientConfigMigrationTest {
 			6,
 			HorizontalAlignment.RIGHT,
 			VerticalAlignment.CENTER,
-			NavigationVisibility.AUTO_HIDE,
+			NavigationVisibility.DISABLED,
 			IngredientGridLayoutMode.MAXIMIZE_AVAILABLE_SPACE,
-			IngredientGridNavigationMode.SMOOTH_SCROLLING
+			IngredientGridNavigationMode.SCROLLING
 		);
 		assertTrue(Files.exists(configFile));
 		assertEquals(Files.readString(legacyFile), Files.readString(ConfigFileUtil.getBackupPath(legacyFile, 1)));
@@ -224,7 +294,94 @@ public class ClientConfigMigrationTest {
 		assertFalse(reloaded.getClientConfig().recipeSyncWarningEnabled().get());
 		assertFalse(reloaded.getClientConfig().recipeSlotCyclingEnabled().get());
 		assertEquals(IngredientGridLayoutMode.MAXIMIZE_AVAILABLE_SPACE, reloaded.getIngredientListConfig().layoutMode().get());
-		assertEquals(IngredientGridNavigationMode.SMOOTH_SCROLLING, reloaded.getBookmarkListConfig().navigationMode().get());
+		assertEquals(IngredientGridNavigationMode.SCROLLING, reloaded.getBookmarkListConfig().navigationMode().get());
+	}
+
+	@ParameterizedTest
+	@CsvSource({
+		"true, BACKGROUND",
+		"false, NONE",
+		"NONE, NONE",
+		"BACKGROUND, BACKGROUND",
+		"BORDER_ONLY, BORDER_ONLY",
+		"GRID, GRID",
+		"invalid, NONE"
+	})
+	public void loadsBackgroundStylesAndLegacyBooleans(String savedValue, IngredientGridBackgroundStyle expected, @TempDir Path tempDir) throws IOException {
+		Path configFile = tempDir.resolve("jei-client.ini");
+		Files.writeString(configFile, "[lists]\ndrawBackground = " + savedValue + "\n");
+		ConfigFileWatcherSettings disabledWatcher = ConfigFileWatcherSettings.clientDefaults().withEnabled(false);
+		ConfigManager configManager = new ConfigManager("JEI Background Style Migration Test", disabledWatcher, disabledWatcher);
+		ISortingConfig<String> recipeSorting = configManager.createInMemorySortingConfig(Comparator.naturalOrder(), true);
+		ClientConfigs configs = new ClientConfigs(
+			new ConfigSchemaBuilder("jei", configFile, "jei.config.client", configManager),
+			false,
+			recipeSorting
+		);
+
+		assertEquals(expected, configs.getIngredientListConfig().backgroundStyle().get());
+		assertEquals(expected, configs.getBookmarkListConfig().backgroundStyle().get());
+		assertEquals(
+			Optional.of(List.of(IngredientGridBackgroundStyle.values())),
+			configs.getIngredientListConfig().backgroundStyle().getEditorInfo().getSerializer().getAllValidValues()
+		);
+	}
+
+	@Test
+	public void migratesSmoothScrollingNavigationModeFromCurrentConfig(@TempDir Path tempDir) throws IOException {
+		Path configFile = tempDir.resolve("jei-client.ini");
+		Files.writeString(configFile, """
+			[lists]
+			navigationMode = SMOOTH_SCROLLING
+			""");
+
+		ConfigFileWatcherSettings disabledWatcher = ConfigFileWatcherSettings.clientDefaults().withEnabled(false);
+		ConfigManager configManager = new ConfigManager("JEI Navigation Mode Migration Test", disabledWatcher, disabledWatcher);
+		ISortingConfig<String> recipeSorting = configManager.createInMemorySortingConfig(Comparator.naturalOrder(), true);
+		ClientConfigs configs = new ClientConfigs(
+			new ConfigSchemaBuilder("jei", configFile, "jei.config.client", configManager),
+			false,
+			recipeSorting
+		);
+
+		assertEquals(
+			IngredientGridNavigationMode.SCROLLING,
+			configs.getIngredientListConfig().navigationMode().get()
+		);
+		assertEquals(
+			Optional.of(List.of(IngredientGridNavigationMode.PAGED, IngredientGridNavigationMode.SCROLLING)),
+			configs.getIngredientListConfig().navigationMode().getEditorInfo().getSerializer().getAllValidValues()
+		);
+	}
+
+	@Test
+	public void migratesValidLegacyValuesWhenAnotherValueIsInvalid(@TempDir Path tempDir) throws IOException {
+		Path configDirectory = tempDir.resolve("jei");
+		Path legacyFile = configDirectory.resolve("jei-client.ini");
+		Path configFile = configDirectory.resolve("client").resolve("jei-client.ini");
+		Files.createDirectories(configDirectory);
+		Files.writeString(legacyFile, """
+			[appearance]
+			centerSearch = true
+			recipeGuiHeight = invalid
+			""");
+
+		ConfigFileWatcherSettings disabledWatcher = ConfigFileWatcherSettings.clientDefaults().withEnabled(false);
+		ConfigManager configManager = new ConfigManager("Partial JEI Config Migration Test", disabledWatcher, disabledWatcher);
+		ISortingConfig<String> recipeSorting = configManager.createInMemorySortingConfig(Comparator.naturalOrder(), true);
+		ConfigSchemaBuilder schemaBuilder = new ConfigSchemaBuilder("jei", configFile, "jei.config.client", configManager);
+		schemaBuilder.setLegacySources(LegacyConfigPaths.get(configDirectory, UUID.randomUUID(), "jei-client.ini"));
+		ClientConfigs configs = new ClientConfigs(
+			schemaBuilder,
+			false,
+			recipeSorting
+		);
+
+		IClientConfig client = configs.getClientConfig();
+		assertEquals(SearchBarPosition.CENTERED, client.searchBarPosition().get());
+		assertEquals(IClientConfig.defaultRecipeGuiHeight, client.maxRecipeGuiHeight().get());
+		assertTrue(Files.exists(configFile));
+		assertEquals(Files.readString(legacyFile), Files.readString(ConfigFileUtil.getBackupPath(legacyFile, 1)));
 	}
 
 	private static void assertGridConfig(
@@ -242,7 +399,7 @@ public class ClientConfigMigrationTest {
 		assertEquals(horizontalAlignment, config.horizontalAlignment().get());
 		assertEquals(verticalAlignment, config.verticalAlignment().get());
 		assertEquals(navigationVisibility, config.navigationVisibility().get());
-		assertTrue(config.drawBackground().get());
+		assertEquals(IngredientGridBackgroundStyle.BACKGROUND, config.backgroundStyle().get());
 		assertEquals(layoutMode, config.layoutMode().get());
 		assertEquals(navigationMode, config.navigationMode().get());
 	}
